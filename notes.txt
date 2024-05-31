@@ -1,0 +1,7 @@
+连接数据库：
+mysql -u root -p
+USE webapp
+
+关闭服务器：
+netstat -ano | findstr :5001
+taskkill /PID 1234 /F

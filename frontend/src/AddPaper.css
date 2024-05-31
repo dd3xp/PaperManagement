@@ -1,0 +1,30 @@
+.add-paper-container {
+    padding: 20px;
+  }
+  
+  .title-input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    font-size: 18px;
+  }
+  
+  .editor {
+    height: 400px;
+    margin-bottom: 20px;
+  }
+  
+  .save-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .save-button:hover {
+    background-color: #fc5c7d;
+  }
+  

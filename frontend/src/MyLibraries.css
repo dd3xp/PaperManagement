@@ -1,0 +1,122 @@
+/* MyLibraries.css */
+.libraries-container {
+  padding: 20px;
+}
+
+h1 {
+  color: #333;
+  margin-bottom: 30px; /* 与按钮保持较大距离 */
+}
+
+.button-container {
+  display: flex;
+  gap: 20px; /* 按钮之间的间距 */
+  margin-bottom: 20px;
+}
+
+.add-paper-button, .view-libraries-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.add-paper-button:hover, .view-libraries-button:hover {
+  background-color: #fc5c7d;
+}
+
+.editor-container {
+  margin-top: 20px;
+}
+
+.title-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+
+.editor {
+  height: 400px;
+  margin-bottom: 20px;
+}
+
+.save-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-top: 20px; /* 确保按钮不会覆盖编辑框 */
+}
+
+.save-button:hover {
+  background-color: #fc5c7d;
+}
+
+.error {
+  color: red;
+  margin-top: 10px;
+}
+
+.libraries-list {
+  margin-top: 20px;
+}
+
+.library-item {
+  background: #f9f9f9;
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.library-item:hover {
+  background: #ececec;
+}
+
+.add-library-button, .save-library-button, .back-to-libraries-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.add-library-button:hover, .save-library-button:hover, .back-to-libraries-button:hover {
+  background-color: #fc5c7d;
+}
+
+.add-library-form {
+  margin-top: 20px;
+}
+
+.add-library-form input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.library-papers-container {
+  margin-top: 20px;
+}
+
+.papers-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-item {
+  background: #f9f9f9;
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+}
