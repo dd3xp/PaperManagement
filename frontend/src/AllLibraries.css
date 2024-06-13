@@ -1,0 +1,215 @@
+.all-libraries-container {
+    padding: 20px;
+  }
+  
+  .all-libraries-container h1 {
+    color: #333;
+    margin-bottom: 20px;
+  }
+  
+  .all-libraries-search-container {
+    margin-bottom: 20px;
+  }
+  
+  .all-libraries-search-container input {
+    padding: 10px;
+    font-size: 16px;
+    margin-right: 10px;
+    background: transparent;
+    border: 1px solid rgb(218, 218, 218);
+    color: black;
+    border-radius: 5px;
+  }
+  
+  .all-libraries-search-container input::placeholder {
+    color: black;
+  }
+  
+  .all-libraries-search-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    border-radius: 5px;
+  }
+  
+  .all-libraries-search-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .all-libraries-list {
+    margin-top: 20px;
+  }
+  
+  .all-libraries-item {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .all-libraries-item-content {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .all-libraries-item h3 {
+    margin: 0 0 10px;
+  }
+  
+  .all-libraries-item p {
+    margin: 0;
+  }
+  
+  .view-button,
+  .favorite-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    align-self: center;
+    margin-left: 10px;
+  }
+  
+  .view-button:hover,
+  .favorite-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .favorite-button:disabled {
+    background-color: gray;
+    cursor: not-allowed;
+  }
+  
+  .all-papers-container {
+    padding: 20px;
+    position: relative;
+  }
+  
+  .all-papers-container h2 {
+    color: #333;
+    font-size: 24px;
+    margin-bottom: 10px;
+    margin-top: 10px;
+  }
+  
+  .all-papers-list {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .all-papers-item {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .all-papers-options-container {
+    position: relative;
+  }
+  
+  .options-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .options-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .all-papers-options-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+    z-index: 1;
+  }
+  
+  .all-papers-options-dropdown button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 0px;
+  }
+  
+  .all-papers-options-dropdown button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .view-paper-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 0px;
+  }
+  
+  .view-paper-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .back-button-container {
+    text-align: left;
+    margin-top: 10px;
+  }
+  
+  .back-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-bottom: 10px; /* 增加与论文块的距离 */
+  }
+
+  .back-button:hover {
+    background-color: #fc5c7d;
+  }
+
+  /* Custom styling for favorited libraries in user's own library */
+  .favorited-library {
+    background: rgba(255, 255, 0, 0.5); /* 半透明的黄色 */
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .no-libraries-message {
+    color: #333;
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+
+  

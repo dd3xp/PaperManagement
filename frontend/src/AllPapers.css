@@ -2,31 +2,115 @@
   padding: 20px;
 }
 
-h1 {
-  color: #333; /* 修改标题颜色 */
+.all-papers-container h1 {
+  color: #333;
+  font-size: 32px;
+  margin-bottom: 20px;
 }
 
-input {
+.all-papers-search-container {
+  margin-bottom: 20px;
+}
+
+.all-papers-search-container input {
   padding: 10px;
   font-size: 16px;
   margin-right: 10px;
+  background: transparent;
+  border: 1px solid rgb(218, 218, 218);
+  color: black; /* 确保输入文字为黑色 */
+  border-radius: 5px;
 }
 
-button {
+.all-papers-search-container input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.all-papers-search-container button {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  border-radius: 5px;
 }
 
-.papers-list {
+.all-papers-search-container button:hover {
+  background-color: #fc5c7d;
+}
+
+.all-papers-list {
   display: flex;
   flex-direction: column;
 }
 
-.paper-item {
-  background: #f1f1f1; /* 修改论文块背景颜色 */
+.all-papers-item {
+  background: rgba(255, 255, 255, 0.5); /* 半透明白色 */
   padding: 15px;
   margin-bottom: 10px;
   border-radius: 5px;
-  color: #333; /* 修改论文字体颜色 */
+  color: black; /* 确保文字为黑色 */
+  display: flex;
+  justify-content: space-between; /* 将 options-button 移到右侧 */
+  align-items: center; /* 确保内容垂直居中 */
+}
+
+.all-papers-item h2 {
+  margin-bottom: 5px; /* 标题和其他内容之间的间距 */
+}
+
+.all-papers-item p {
+  margin-bottom: 5px; /* 作者和关键字之间的间距 */
+}
+
+.all-papers-options-container {
+  position: relative;
+}
+
+.all-papers-options-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.all-papers-options-button:hover {
+  background-color: #fc5c7d;
+}
+
+.all-papers-options-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  z-index: 1;
+}
+
+.all-papers-options-dropdown .all-papers-view-paper-button,
+.all-papers-options-dropdown .all-papers-delete-paper-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.all-papers-options-dropdown .all-papers-view-paper-button:hover,
+.all-papers-options-dropdown .all-papers-delete-paper-button:hover {
+  background-color: #fc5c7d;
+}
+
+.all-papers-empty-message {
+  color: #333;
+  font-size: 24px;
+  margin-bottom: 20px;
 }

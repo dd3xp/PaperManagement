@@ -21,6 +21,11 @@ const Comment = sequelize.define('Comment', {
       model: Paper,
       key: 'id'
     }
+  },
+  rating: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0
   }
 }, {
   timestamps: true

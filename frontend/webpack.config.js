@@ -30,7 +30,7 @@ module.exports = {
   devServer: {
     contentBase: path.join(__dirname, 'public'),
     historyApiFallback: true,
-    allowedHosts: ['localhost'], // 确保这是一个非空的字符串数组
+    allowedHosts: ['localhost', 'http://localhost:5001'], // 确保这是一个非空的字符串数组
     proxy: {
       '/api': 'http://localhost:5001',
     },

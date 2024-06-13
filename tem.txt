@@ -1,0 +1,4565 @@
+我有以下几个文件：
+
+backend文件夹中的controllers文件夹：
+
+controllers文件夹：
+
+auth.controller.js:
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/user.model');
+
+// 确保你在此处设置了有效的密钥
+const secret = 'redd33211xyz';
+
+const validateInput = (username, password) => {
+  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  if (!usernameRegex.test(username)) {
+    return 'Username must be 3-20 characters long and can only contain letters, numbers, and underscores.';
+  }
+
+  if (!passwordRegex.test(password)) {
+    return 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.';
+  }
+
+  return null;
+};
+
+exports.register = async (req, res) => {
+  const { username, password } = req.body;
+  const validationError = validateInput(username, password);
+
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ username, password: hashedPassword });
+    res.status(201).json({ message: 'User created', user });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+exports.login = async (req, res) => {
+  const { username, password } = req.body;
+  const validationError = validateInput(username, password);
+
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
+      return res.status(400).json({ message: 'User not found' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: 'Invalid password' });
+    }
+
+    const token = jwt.sign({ userId: user.id }, secret, { expiresIn: '1h' });
+    res.json({ message: 'Logged in', token });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+comment.controller.js:
+const Comment = require('../models/comment.model');
+const Paper = require('../models/paper.model');
+const User = require('../models/user.model');
+
+exports.createComment = async (req, res) => {
+  const { content, paperId } = req.body;
+  try {
+    const comment = await Comment.create({
+      content,
+      paperId,
+      userId: req.userId,
+    });
+    res.status(201).json({ message: 'Comment created', comment });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.getComments = async (req, res) => {
+  try {
+    const comments = await Comment.findAll({
+      where: { paperId: req.params.paperId },
+      include: [User],
+    });
+    res.status(200).json(comments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
+library.controller.js:
+const Library = require('../models/library.model');
+const Paper = require('../models/paper.model');
+const User = require('../models/user.model');
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+const { Op } = require('sequelize');
+
+// 创建新文献库
+const createLibrary = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const { name, description } = req.body;
+    const library = await Library.create({ name, description, userId, permission: 'Public' }); // 默认设置为Public
+    res.status(201).json(library);
+  } catch (error) {
+    console.error('Error creating library:', error);
+    res.status(500).json({ error: 'An error occurred while creating the library' });
+  }
+};
+
+// 删除文献库
+const deleteLibrary = async (req, res) => {
+  try {
+    const { libraryId } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const library = await Library.findOne({ where: { id: libraryId, userId } });
+    if (!library) {
+      return res.status(404).json({ error: 'Library not found or access denied' });
+    }
+
+    await Paper.destroy({ where: { libraryId } });
+    await library.destroy();
+    res.status(200).json({ message: 'Library deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting library:', error);
+    res.status(500).json({ error: 'An error occurred while deleting the library' });
+  }
+};
+
+// 获取用户的文献库
+const getMyLibraries = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const libraries = await Library.findAll({ where: { userId } });
+    if (!libraries) {
+      return res.status(404).json({ error: 'No libraries found' });
+    }
+
+    res.status(200).json(libraries);
+  } catch (error) {
+    console.error('Error fetching libraries:', error);
+    res.status(500).json({ error: 'An error occurred while fetching your libraries' });
+  }
+};
+
+// 获取特定文献库中的所有论文
+const getPapersByLibrary = async (req, res) => {
+  try {
+    const { libraryId } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const papers = await Paper.findAll({ where: { libraryId } });
+    res.status(200).json(papers);
+  } catch (error) {
+    console.error('Error fetching papers by library:', error);
+    res.status(500).json({ error: 'An error occurred while fetching papers by library' });
+  }
+};
+
+// 更新文献库权限
+const updateLibraryPermission = async (req, res) => {
+  try {
+    const { libraryId } = req.params;
+    const { permission } = req.body;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const library = await Library.findOne({ where: { id: libraryId, userId } });
+    if (!library) {
+      return res.status(404).json({ error: 'Library not found or access denied' });
+    }
+
+    library.permission = permission;
+    await library.save();
+    res.status(200).json({ message: 'Library permission updated successfully' });
+  } catch (error) {
+    console.error('Error updating library permission:', error);
+    res.status(500).json({ error: 'An error occurred while updating the library permission' });
+  }
+};
+
+// 添加收藏文献库
+const favoriteLibrary = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const { libraryId } = req.params;
+    const user = await User.findByPk(userId);
+
+    const library = await Library.findByPk(libraryId);
+    if (!library) {
+      return res.status(404).json({ message: 'Library not found' });
+    }
+
+    // 添加检查以确保用户无法收藏自己的文献库
+    if (library.userId === userId) {
+      return res.status(400).json({ message: 'You cannot favorite your own library' });
+    }
+
+    await user.addLibrary(library);
+
+    res.status(200).json({ message: 'Library favorited successfully' });
+  } catch (error) {
+    console.error('Error favoriting library:', error);
+    res.status(500).json({ error: 'An error occurred while favoriting the library' });
+  }
+};
+
+// 获取收藏的文献库
+const getFavorites = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const user = await User.findByPk(userId);
+    const favoriteLibraries = await user.getLibraries();
+
+    res.status(200).json(favoriteLibraries);
+  } catch (error) {
+    console.error('Error fetching favorite libraries:', error);
+    res.status(500).json({ error: 'An error occurred while fetching favorite libraries' });
+  }
+};
+
+const getAllVisibleLibraries = async (req, res) => {
+  try {
+    const libraries = await Library.findAll({
+      where: {
+        permission: {
+          [Op.in]: ['Public', 'Shared']
+        }
+      }
+    });
+    res.status(200).json(libraries);
+  } catch (error) {
+    console.error('Error fetching libraries:', error);
+    res.status(500).json({ error: 'An error occurred while fetching libraries' });
+  }
+};
+
+// 取消收藏文献库
+const unfavoriteLibrary = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const { libraryId } = req.params;
+    const user = await User.findByPk(userId);
+
+    const library = await Library.findByPk(libraryId);
+    if (!library) {
+      return res.status(404).json({ message: 'Library not found' });
+    }
+
+    await user.removeLibrary(library);
+
+    res.status(200).json({ message: 'Library unfavorited successfully' });
+  } catch (error) {
+    console.error('Error unfavoriting library:', error);
+    res.status(500).json({ error: 'An error occurred while unfavoriting the library' });
+  }
+};
+
+module.exports = {
+  createLibrary,
+  deleteLibrary,
+  getMyLibraries,
+  getPapersByLibrary,
+  updateLibraryPermission,
+  favoriteLibrary,
+  unfavoriteLibrary,  // 确保导出
+  getFavorites,
+  getAllVisibleLibraries
+};
+
+
+paper.controller.js:
+const fs = require('fs');
+const path = require('path');
+const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
+const { jwtSecret } = require('../config/config');
+const Paper = require('../models/paper.model');
+const Library = require('../models/library.model');
+const pdfParse = require('pdf-parse');
+const { Document, Packer, Paragraph } = require('docx');
+const puppeteer = require('puppeteer');
+
+// 创建新论文
+const createPaper = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const { title, author, keywords, permissions, libraryId } = req.body;
+    const pdfFile = req.file; // 获取上传的PDF文件
+
+    // 先创建论文记录，获取唯一ID
+    const paper = await Paper.create({
+      title,
+      author,
+      keywords,
+      permissions,
+      libraryId,
+      ownerId: userId,
+      pdfPath: null, // 初始化为null，稍后更新
+      textContent: '', // 初始化为空字符串，稍后更新
+      content: '', // 新增content字段
+      sharedUsers: [] // 初始化sharedUsers为空数组
+    });
+
+    if (pdfFile) {
+      const pdfFileName = `${paper.id}.pdf`;
+      const saveDir = path.join(__dirname, '..', 'pdfs');
+      const savePath = path.join(saveDir, pdfFileName);
+      const pdfPath = path.join('pdfs', pdfFileName);
+
+      // 确保保存目录存在
+      if (!fs.existsSync(saveDir)) {
+        fs.mkdirSync(saveDir, { recursive: true });
+      }
+
+      // 将上传的文件保存到指定路径并重命名为论文ID
+      fs.renameSync(pdfFile.path, savePath);
+
+      // 更新论文记录的pdfPath
+      paper.pdfPath = pdfPath;
+      await paper.save();
+
+      // 将PDF转换为TXT文件
+      const dataBuffer = fs.readFileSync(savePath);
+      pdfParse(dataBuffer).then(async data => {
+        const txtDir = path.join(__dirname, '..', 'txts');
+        if (!fs.existsSync(txtDir)) {
+          fs.mkdirSync(txtDir, { recursive: true });
+        }
+        const txtFileName = `${paper.id}.txt`;
+        const txtPath = path.join(txtDir, txtFileName);
+
+        fs.writeFileSync(txtPath, data.text);
+
+        // 更新论文记录的textContent
+        paper.textContent = data.text;
+        paper.content = data.text;
+        await paper.save();
+
+        console.log('PDF has been converted and saved to TXT');
+      }).catch(err => {
+        console.error('Error converting PDF to TXT:', err);
+      });
+    } else {
+      // 如果没有上传 PDF 文件，创建一个空白的 PDF 文件
+      const pdfFileName = `${paper.id}.pdf`;
+      const saveDir = path.join(__dirname, '..', 'pdfs');
+      const pdfPath = path.join(saveDir, pdfFileName);
+
+      // 确保保存目录存在
+      if (!fs.existsSync(saveDir)) {
+        fs.mkdirSync(saveDir, { recursive: true });
+      }
+
+      // 创建一个空白的 PDF 文件
+      const doc = new Document({
+        creator: 'YourAppName',  // 添加creator属性
+        title: 'Document Title',
+        description: 'Document Description',
+        sections: [
+          {
+            properties: {},
+            children: []
+          }
+        ]
+      });
+      const buffer = await Packer.toBuffer(doc);
+      fs.writeFileSync(pdfPath, buffer);
+
+      // 更新论文记录的pdfPath
+      paper.pdfPath = pdfPath;
+      await paper.save();
+    }
+
+    res.status(201).json(paper);
+  } catch (error) {
+    console.error('Error creating paper:', error);
+    res.status(500).json({ error: 'An error occurred while creating the paper' });
+  }
+};
+
+// 获取论文PDF
+const getPaperPDF = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper || !paper.pdfPath) {
+      return res.status(404).json({ error: 'PDF not found' });
+    }
+
+    const pdfPath = path.join(__dirname, '..', paper.pdfPath);
+
+    if (fs.existsSync(pdfPath)) {
+      res.sendFile(pdfPath);
+    } else {
+      res.status(404).json({ error: 'PDF not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching paper PDF:', error);
+    res.status(500).json({ error: 'An error occurred while fetching the paper PDF' });
+  }
+};
+
+// 更新论文PDF
+const updatePaperPDF = async (req, res) => {
+  try {
+    const { paperId } = req.body;
+    const pdfFile = req.file; // 获取上传的PDF文件
+
+    if (!pdfFile) {
+      return res.status(400).json({ error: 'PDF file is required' });
+    }
+
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    const pdfFileName = `${paper.id}.pdf`;
+    const saveDir = path.join(__dirname, '..', 'pdfs');
+    const savePath = path.join(saveDir, pdfFileName);
+    const newPdfPath = path.join('pdfs', pdfFileName);
+
+    // 确保保存目录存在
+    if (!fs.existsSync(saveDir)) {
+      fs.mkdirSync(saveDir, { recursive: true });
+    }
+
+    // 将上传的文件保存到指定路径并重命名为论文ID
+    fs.renameSync(pdfFile.path, savePath);
+
+    // 更新数据库中的pdfPath
+    paper.pdfPath = newPdfPath;
+    await paper.save();
+
+    // 将PDF转换为TXT文件
+    const dataBuffer = fs.readFileSync(savePath);
+    pdfParse(dataBuffer).then(async data => {
+      const txtDir = path.join(__dirname, '..', 'txts');
+      if (!fs.existsSync(txtDir)) {
+        fs.mkdirSync(txtDir, { recursive: true });
+      }
+      const txtFileName = `${paper.id}.txt`;
+      const txtPath = path.join(txtDir, txtFileName);
+
+      fs.writeFileSync(txtPath, data.text);
+
+      // 更新论文记录的textContent
+      paper.textContent = data.text;
+      paper.content = data.text;
+      await paper.save();
+
+      console.log('PDF has been converted and saved to TXT');
+    }).catch(err => {
+      console.error('Error converting PDF to TXT:', err);
+    });
+
+    res.status(200).json({ message: 'Paper updated successfully' });
+  } catch (error) {
+    console.error('Error updating paper:', error);
+    res.status(500).json({ error: 'An error occurred while updating the paper' });
+  }
+};
+
+// 移动论文
+const movePaper = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const { libraryId } = req.body;
+
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    const library = await Library.findByPk(libraryId);
+    if (!library) {
+      return res.status(404).json({ error: 'Library not found' });
+    }
+
+    if (library.permission === 'Private' && paper.ownerId !== req.userId && !paper.sharedUsers.includes(req.userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    paper.libraryId = libraryId;
+    await paper.save();
+
+    res.status(200).json({ message: 'Paper moved successfully' });
+  } catch (error) {
+    console.error('Error moving paper:', error);
+    res.status(500).json({ error: 'An error occurred while moving the paper' });
+  }
+};
+
+// 获取用户自己的论文
+const getMyLibrary = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const papers = await Paper.findAll({ where: { ownerId: userId } });
+    res.status(200).json(papers);
+  } catch (error) {
+    console.error('Error fetching papers:', error);
+    res.status(500).json({ error: 'An error occurred while fetching your papers' });
+  }
+};
+
+// 获取所有论文
+const getAllPapers = async (req, res) => {
+  try {
+    const papers = await Paper.findAll({
+      include: {
+        model: Library,
+        where: {
+          permission: {
+            [Op.ne]: 'Private'
+          }
+        }
+      }
+    });
+    res.status(200).json(papers);
+  } catch (error) {
+    console.error('Error fetching all papers:', error);
+    res.status(500).json({ error: 'An error occurred while fetching all papers' });
+  }
+};
+
+// 搜索论文
+const searchPapers = async (req, res) => {
+  const { search } = req.query;
+  try {
+    const papers = await Paper.findAll({
+      include: {
+        model: Library,
+        where: {
+          permission: {
+            [Op.ne]: 'Private'
+          }
+        }
+      },
+      where: {
+        title: {
+          [Op.like]: `%${search}%`
+        }
+      }
+    });
+    res.status(200).json(papers);
+  } catch (error) {
+    console.error('Error searching papers:', error);
+    res.status(500).json({ error: 'An error occurred while searching papers' });
+  }
+};
+
+// 创建新文献库
+const createLibrary = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const { name } = req.body;
+    const library = await Library.create({ name, userId });
+    res.status(201).json(library);
+  } catch (error) {
+    console.error('Error creating library:', error);
+    res.status(500).json({ error: 'An error occurred while creating the library' });
+  }
+};
+
+// 获取用户的文献库
+const getMyLibraries = async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const libraries = await Library.findAll({ where: { userId } });
+    res.status(200).json(libraries);
+  } catch (error) {
+    console.error('Error fetching libraries:', error);
+    res.status(500).json({ error: 'An error occurred while fetching your libraries' });
+  }
+};
+
+// 获取特定文献库中的所有论文
+const getPapersByLibrary = async (req, res) => {
+  try {
+    const { libraryId } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const papers = await Paper.findAll({ where: { libraryId } });
+    res.status(200).json(papers);
+  } catch (error) {
+    console.error('Error fetching papers by library:', error);
+    res.status(500).json({ error: 'An error occurred while fetching papers by library' });
+  }
+};
+
+// 删除论文
+const deletePaper = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    console.log(`Attempting to delete paper with id: ${paperId} by user: ${userId}`);
+
+    const paper = await Paper.findOne({ where: { id: paperId, ownerId: userId } });
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found or access denied' });
+    }
+
+    const pdfPath = path.join(__dirname, '..', 'pdfs', `${paperId}.pdf`);
+    const txtPath = path.join(__dirname, '..', 'txts', `${paperId}.txt`);
+    const docxPath = path.join(__dirname, '..', 'docxs', `${paperId}.docx`);
+
+    if (fs.existsSync(pdfPath)) {
+      fs.unlinkSync(pdfPath);
+    }
+
+    if (fs.existsSync(txtPath)) {
+      fs.unlinkSync(txtPath);
+    }
+
+    if (fs.existsSync(docxPath)) {
+      fs.unlinkSync(docxPath);
+    }
+
+    await paper.destroy();
+    console.log(`Paper with id: ${paperId} and associated files deleted successfully`);
+    res.status(200).json({ message: 'Paper deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting paper:', error);
+    res.status(500).json({ error: 'An error occurred while deleting the paper' });
+  }
+};
+
+// 删除文献库
+const deleteLibrary = async (req, res) => {
+  try {
+    const { libraryId } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    console.log(`Attempting to delete library with id: ${libraryId} by user: ${userId}`);
+
+    const library = await Library.findOne({ where: { id: libraryId, userId } });
+    if (!library) {
+      return res.status(404).json({ error: 'Library not found or access denied' });
+    }
+
+    const papers = await Paper.findAll({ where: { libraryId } });
+
+    for (const paper of papers) {
+      const pdfPath = path.join(__dirname, '..', 'pdfs', `${paper.id}.pdf`);
+      const txtPath = path.join(__dirname, '..', 'txts', `${paper.id}.txt`);
+      const docxPath = path.join(__dirname, '..', 'docxs', `${paper.id}.docx`);
+
+      if (fs.existsSync(pdfPath)) {
+        fs.unlinkSync(pdfPath);
+      }
+
+      if (fs.existsSync(txtPath)) {
+        fs.unlinkSync(txtPath);
+      }
+
+      if (fs.existsSync(docxPath)) {
+        fs.unlinkSync(docxPath);
+      }
+    }
+
+    await Paper.destroy({ where: { libraryId } });
+    await library.destroy();
+    console.log(`Library with id: ${libraryId} and its papers and associated files deleted successfully`);
+    res.status(200).json({ message: 'Library and its papers deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting library:', error);
+    res.status(500).json({ error: 'An error occurred while deleting the library' });
+  }
+};
+
+// 获取论文内容
+const getPaperContent = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const token = req.headers['authorization'].split(' ')[1];
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    const paper = await Paper.findByPk(paperId);
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    const isOwner = paper.ownerId === userId;
+    const isSharedUser = Array.isArray(paper.sharedUsers) && paper.sharedUsers.includes(userId);
+
+    if (!isOwner && !isSharedUser) {
+      return res.status(403).json({ error: 'Access Denied' });
+    }
+
+    res.status(200).json({
+      content: paper.content,
+      isOwner,
+      isSharedUser
+    });
+  } catch (error) {
+    console.error('Error fetching paper content:', error);
+    res.status(500).json({ error: 'An error occurred while fetching the paper content' });
+  }
+};
+
+// 保存编辑内容到DOCX并转换为PDF
+const savePaperContent = async (req, res) => {
+  try {
+    const { paperId, content } = req.body;
+    const docxFileName = `${paperId}.docx`;
+    const saveDir = path.join(__dirname, '..', 'docxs');
+    const savePath = path.join(saveDir, docxFileName);
+
+    const pdfFileName = `${paperId}.pdf`;
+    const pdfSaveDir = path.join(__dirname, '..', 'pdfs');
+    const pdfSavePath = path.join(pdfSaveDir, pdfFileName);
+
+    // 确保保存目录存在
+    if (!fs.existsSync(saveDir)) {
+      fs.mkdirSync(saveDir, { recursive: true });
+    }
+
+    // 删除旧的DOCX文件（如果存在）
+    if (fs.existsSync(savePath)) {
+      fs.unlinkSync(savePath);
+    }
+
+    // 创建DOCX文件
+    const doc = new Document({
+      creator: 'YourAppName',  // 添加creator属性
+      title: 'Document Title',
+      description: 'Document Description',
+      sections: [
+        {
+          properties: {},
+          children: content.split('\n').map(line => new Paragraph(line))
+        }
+      ]
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    fs.writeFileSync(savePath, buffer);
+
+    // 等待10ms再转换为PDF
+    setTimeout(async () => {
+      if (!fs.existsSync(pdfSaveDir)) {
+        fs.mkdirSync(pdfSaveDir, { recursive: true });
+      }
+
+      const browser = await puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        timeout: 0
+      });
+      const page = await browser.newPage();
+
+      await page.setContent(content);
+      await page.pdf({ path: pdfSavePath, format: 'A4' });
+
+      await browser.close();
+
+      console.log('DOCX has been saved and converted to PDF');
+    }, 10);
+
+    // 更新数据库中的content字段
+    const paper = await Paper.findByPk(paperId);
+    paper.content = content;
+    await paper.save();
+
+    res.status(200).json({ message: 'Content saved to DOCX and converted to PDF successfully' });
+  } catch (error) {
+    console.error('Error saving content to DOCX and converting to PDF:', error);
+    res.status(500).json({ error: 'An error occurred while saving content to DOCX and converting to PDF' });
+  }
+};
+
+// 分享论文
+const sharePaper = async (req, res) => {
+  try {
+    const { paperId, userId } = req.body;
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    let sharedUsers = Array.isArray(paper.sharedUsers) ? paper.sharedUsers : [];
+    sharedUsers.push(parseInt(userId, 10)); // 确保 userId 作为整数存储
+
+    paper.sharedUsers = sharedUsers;
+    await paper.save();
+
+    res.status(200).json({ message: 'Paper shared successfully' });
+  } catch (error) {
+    console.error('Error sharing paper:', error);
+    res.status(500).json({ error: 'An error occurred while sharing the paper' });
+  }
+};
+
+// 获取分享列表
+const getShareList = async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    res.status(200).json({ sharedUsers: paper.sharedUsers });
+  } catch (error) {
+    console.error('Error fetching share list:', error);
+    res.status500().json({ error: 'An error occurred while fetching the share list' });
+  }
+};
+
+// 取消分享论文
+const unsharePaper = async (req, res) => {
+  try {
+    const { paperId, userId } = req.body;
+    const paper = await Paper.findByPk(paperId);
+
+    if (!paper) {
+      return res.status(404).json({ error: 'Paper not found' });
+    }
+
+    let sharedUsers = paper.sharedUsers || [];
+    sharedUsers = sharedUsers.filter(user => user !== userId);
+
+    paper.sharedUsers = sharedUsers;
+    await paper.save();
+
+    res.status(200).json({ message: 'Paper unshared successfully' });
+  } catch (error) {
+    console.error('Error unsharing paper:', error);
+    res.status(500).json({ error: 'An error occurred while unsharing the paper' });
+  }
+};
+
+const getPaper = async (req, res) => {
+  try {
+    const paperId = req.params.paperId;
+    const paper = await Paper.findByPk(paperId);
+    if (!paper) {
+      return res.status(404).json({ message: 'Paper not found' });
+    }
+    res.status(200).json(paper);
+  } catch (error) {
+    console.error('Error fetching paper:', error);
+    res.status(500).json({ message: 'Error fetching paper' });
+  }
+};
+
+const updatePaper = async (req, res) => {
+  try {
+    const paperId = req.params.paperId;
+    const { title, author, keywords } = req.body;
+    const paper = await Paper.findByPk(paperId);
+    if (!paper) {
+      return res.status(404).json({ message: 'Paper not found' });
+    }
+
+    paper.title = title || paper.title;
+    paper.author = author || paper.author;
+    paper.keywords = keywords || paper.keywords;
+
+    await paper.save();
+    res.status(200).json({ message: 'Paper updated successfully' });
+  } catch (error) {
+    console.error('Error updating paper:', error);
+    res.status(500).json({ message: 'Error updating paper' });
+  }
+};
+
+module.exports = {
+  createPaper,
+  getPaperPDF,
+  updatePaperPDF,
+  movePaper,
+  getMyLibrary,
+  getAllPapers,
+  searchPapers,
+  createLibrary,
+  getMyLibraries,
+  getPapersByLibrary,
+  deletePaper,
+  deleteLibrary,
+  getPaperContent,
+  savePaperContent,
+  sharePaper,
+  getShareList,
+  unsharePaper,
+  getPaper,
+  updatePaper
+};
+
+
+backend文件夹中的middleware文件夹：
+
+middleware文件夹：
+
+auth.js:
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+
+const authMiddleware = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Authorization token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid authorization token' });
+  }
+};
+
+module.exports = authMiddleware;
+
+
+authenticate.js:
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/config');
+
+const authenticateJWT = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Authorization token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: 'Invalid token' });
+  }
+};
+
+module.exports = { authenticateJWT };
+
+
+upload.middleware.js:
+const multer = require('multer');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+
+const upload = multer({ storage });
+
+module.exports = upload;
+
+
+backend文件夹中的models文件夹：
+
+models文件夹：
+
+comment.model.js:
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/db.config');
+const User = require('./user.model');
+const Paper = require('./paper.model');
+
+const Comment = sequelize.define('Comment', {
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: User,
+      key: 'id'
+    }
+  },
+  paperId: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: Paper,
+      key: 'id'
+    }
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = Comment;
+
+
+library.model.js:
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+
+const Library = sequelize.define('Library', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  permission: {
+    type: DataTypes.ENUM('Public', 'Private', 'Shared'),
+    allowNull: false,
+    defaultValue: 'Public'
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = Library;
+
+
+paper.model.js:
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+const Library = require('./library.model');
+
+const Paper = sequelize.define('Paper', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  author: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  keywords: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  permissions: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'private'
+  },
+  libraryId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: Library,
+      key: 'id'
+    }
+  },
+  ownerId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  pdfPath: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  sharedUsers: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const rawValue = this.getDataValue('sharedUsers');
+      return rawValue ? JSON.parse(rawValue) : [];
+    },
+    set(value) {
+      this.setDataValue('sharedUsers', JSON.stringify(value));
+    }
+  }
+});
+
+module.exports = Paper;
+
+
+user.model.js:
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+const Library = require('./library.model');
+
+const User = sequelize.define('User', {
+  username: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false
+  }
+}, {
+  timestamps: true
+});
+
+// 多对多关系
+User.belongsToMany(Library, { through: 'Favorites', foreignKey: 'userId' });
+Library.belongsToMany(User, { through: 'Favorites', foreignKey: 'libraryId' });
+
+module.exports = User;
+
+
+backend文件夹中的routes文件夹：
+
+routes文件夹：
+
+auth.routes.js:
+const express = require('express');
+const { register, login } = require('../controllers/auth.controller');
+const router = express.Router();
+
+router.post('/register', register);
+router.post('/login', login);
+
+module.exports = router;
+
+
+comment.routes.js:
+const express = require('express');
+const router = express.Router();
+const Comment = require('../models/comment.model');
+const authMiddleware = require('../middleware/auth'); // 引入认证中间件
+
+// 添加评论路由
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    const { content, paperId } = req.body;
+    const userId = req.userId; // 从认证中间件获取用户ID
+    const comment = await Comment.create({ content, paperId, userId });
+    res.status(201).json({ comment });
+  } catch (error) {
+    console.error('Error adding comment:', error.message);
+    res.status(500).json({ error: 'An error occurred while adding the comment' });
+  }
+});
+
+// 获取评论路由
+router.get('/:paperId', async (req, res) => {
+  try {
+    const { paperId } = req.params;
+    const comments = await Comment.findAll({ where: { paperId } });
+    res.status(200).json(comments);
+  } catch (error) {
+    console.error('Error fetching comments:', error.message);
+    res.status(500).json({ error: 'An error occurred while fetching the comments' });
+  }
+});
+
+module.exports = router;
+
+
+library.routes.js:
+const express = require('express');
+const {
+  createLibrary,
+  deleteLibrary,
+  getMyLibraries,
+  getPapersByLibrary,
+  updateLibraryPermission,
+  favoriteLibrary,
+  unfavoriteLibrary, // 添加这一行
+  getFavorites,
+  getAllVisibleLibraries
+} = require('../controllers/library.controller');
+const authMiddleware = require('../middleware/auth');
+const router = express.Router();
+
+router.post('/', authMiddleware, createLibrary);
+router.delete('/:libraryId', authMiddleware, deleteLibrary);
+router.get('/mylibraries', authMiddleware, getMyLibraries);
+router.get('/:libraryId/papers', authMiddleware, getPapersByLibrary);
+router.get('/all', getAllVisibleLibraries);
+router.put('/:libraryId', authMiddleware, updateLibraryPermission);
+router.post('/:libraryId/favorite', authMiddleware, favoriteLibrary);
+router.post('/:libraryId/unfavorite', authMiddleware, unfavoriteLibrary); // 添加这一行
+router.get('/favorites', authMiddleware, getFavorites);
+
+module.exports = router;
+
+
+paper.routes.js:
+const express = require('express');
+const {
+  createPaper,
+  getMyLibrary,
+  getAllPapers,
+  searchPapers,
+  createLibrary,
+  getMyLibraries,
+  getPapersByLibrary,
+  deletePaper,
+  deleteLibrary,
+  getPaperPDF,
+  updatePaperPDF,
+  movePaper,
+  getPaperContent,
+  savePaperContent,
+  sharePaper,
+  getShareList,
+  unsharePaper,
+  getPaper,
+  updatePaper
+} = require('../controllers/paper.controller');
+const router = express.Router();
+const authMiddleware = require('../middleware/auth'); // 确保路径正确
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
+router.post('/', authMiddleware, upload.single('pdf'), createPaper);
+router.get('/mylibrary', authMiddleware, getMyLibrary);
+router.get('/', getAllPapers);
+router.get('/search', searchPapers);
+router.post('/library', authMiddleware, createLibrary);
+router.get('/mylibraries', authMiddleware, getMyLibraries);
+router.get('/libraries/:libraryId/papers', authMiddleware, getPapersByLibrary);
+router.delete('/:paperId', authMiddleware, deletePaper);
+router.delete('/libraries/:libraryId', authMiddleware, deleteLibrary);
+router.get('/pdf/:paperId', getPaperPDF);
+router.put('/pdf/:paperId', authMiddleware, upload.single('pdf'), updatePaperPDF);
+router.put('/:paperId/move', authMiddleware, movePaper);
+router.get('/content/:paperId', authMiddleware, getPaperContent);
+router.post('/save', authMiddleware, savePaperContent);
+router.post('/share', authMiddleware, sharePaper);
+router.get('/share-list/:paperId', authMiddleware, getShareList);
+router.post('/unshare', authMiddleware, unsharePaper);
+router.get('/:paperId', authMiddleware, getPaper);
+router.put('/:paperId', authMiddleware, updatePaper);
+
+module.exports = router;
+
+
+frontend文件夹中的src文件夹：
+
+src文件夹：
+
+AddPaper.css:
+.add-paper-container {
+  padding: 20px;
+}
+
+.title-input,
+.author-input,
+.keywords-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: black; /* 确保输入文字为黑色 */
+}
+
+.title-input::placeholder,
+.author-input::placeholder,
+.keywords-input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.save-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  display: block; /* 确保按钮显示为块级元素 */
+  margin-top: 10px; /* 增加上边距以避免重叠 */
+}
+
+.save-button:hover {
+  background-color: #fc5c7d;
+}
+
+
+AddPaper.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useHistory } from 'react-router-dom';
+import './AddPaper.css';
+
+const AddPaper = () => {
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [libraries, setLibraries] = useState([]);
+  const [selectedLibrary, setSelectedLibrary] = useState('');
+  const history = useHistory();
+
+  useEffect(() => {
+    const fetchLibraries = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/libraries', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setLibraries(response.data);
+      } catch (error) {
+        console.error('Error fetching libraries:', error);
+      }
+    };
+
+    fetchLibraries();
+  }, []);
+
+  const handleSave = async () => {
+    if (!selectedLibrary) {
+      alert('Please select a library');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('author', author);
+    formData.append('keywords', keywords);
+    formData.append('permissions', 'private');
+    formData.append('libraryId', selectedLibrary);
+    if (selectedFile) {
+      formData.append('pdf', selectedFile);
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('http://localhost:5001/api/papers', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      alert('Paper saved successfully!');
+      history.push('/my-libraries');
+    } catch (error) {
+      console.error('Error saving paper:', error);
+      alert('Failed to save paper.');
+    }
+  };
+
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  };
+
+  return (
+    <div className="add-paper-container">
+      <h1>Add New Paper</h1>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Title"
+        className="title-input"
+      />
+      <input
+        type="text"
+        value={author}
+        onChange={(e) => setAuthor(e.target.value)}
+        placeholder="Author"
+        className="author-input"
+      />
+      <input
+        type="text"
+        value={keywords}
+        onChange={(e) => setKeywords(e.target.value)}
+        placeholder="Keywords (separated by space)"
+        className="keywords-input"
+      />
+      <input
+        type="file"
+        onChange={handleFileChange}
+        accept="application/pdf"
+        className="file-input"
+      />
+      <select
+        value={selectedLibrary}
+        onChange={(e) => setSelectedLibrary(e.target.value)}
+        className="library-select"
+      >
+        <option value="">Select a library</option>
+        {libraries.map(library => (
+          <option key={library.id} value={library.id}>{library.name}</option>
+        ))}
+      </select>
+      <button onClick={handleSave} className="save-button">Save</button>
+    </div>
+  );
+};
+
+export default AddPaper;
+
+
+AllLibraries.css:
+.all-libraries-container {
+    padding: 20px;
+  }
+  
+  .all-libraries-container h1 {
+    color: #333;
+    margin-bottom: 20px;
+  }
+  
+  .all-libraries-search-container {
+    margin-bottom: 20px;
+  }
+  
+  .all-libraries-search-container input {
+    padding: 10px;
+    font-size: 16px;
+    margin-right: 10px;
+    background: transparent;
+    border: 1px solid rgb(218, 218, 218);
+    color: black;
+  }
+  
+  .all-libraries-search-container input::placeholder {
+    color: black;
+  }
+  
+  .all-libraries-search-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    border-radius: 5px;
+  }
+  
+  .all-libraries-search-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .all-libraries-list {
+    margin-top: 20px;
+  }
+  
+  .all-libraries-item {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .all-libraries-item-content {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .all-libraries-item h3 {
+    margin: 0 0 10px;
+  }
+  
+  .all-libraries-item p {
+    margin: 0;
+  }
+  
+  .view-button,
+  .favorite-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    align-self: center;
+    margin-left: 10px;
+  }
+  
+  .view-button:hover,
+  .favorite-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .favorite-button:disabled {
+    background-color: gray;
+    cursor: not-allowed;
+  }
+  
+  .all-papers-container {
+    padding: 20px;
+    position: relative;
+  }
+  
+  .all-papers-container h2 {
+    color: #333;
+    font-size: 24px;
+    margin-bottom: 10px;
+    margin-top: 10px;
+  }
+  
+  .all-papers-list {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .all-papers-item {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .all-papers-options-container {
+    position: relative;
+  }
+  
+  .options-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .options-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .all-papers-options-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+    z-index: 1;
+  }
+  
+  .all-papers-options-dropdown button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 0px;
+  }
+  
+  .all-papers-options-dropdown button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .view-paper-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 0px;
+  }
+  
+  .view-paper-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .back-button-container {
+    text-align: left;
+    margin-top: 10px;
+  }
+  
+  .back-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-bottom: 10px; /* 增加与论文块的距离 */
+  }
+
+  .back-button:hover {
+    background-color: #fc5c7d;
+  }
+
+  /* Custom styling for favorited libraries in user's own library */
+  .favorited-library {
+    background: rgba(255, 255, 0, 0.5); /* 半透明的黄色 */
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  
+
+AllLibraries.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import './AllLibraries.css';
+
+const AllLibraries = () => {
+  const [libraries, setLibraries] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLibrary, setSelectedLibrary] = useState(null);
+  const [papers, setPapers] = useState([]);
+  const [showOptions, setShowOptions] = useState(null);
+  const [favorites, setFavorites] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState('');
+
+  useEffect(() => {
+    const fetchLibraries = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/libraries/all', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setLibraries(response.data);
+      } catch (error) {
+        console.error('Error fetching libraries:', error);
+      }
+    };
+
+    const fetchCurrentUser = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/auth/current', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setCurrentUserId(response.data.id);
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      }
+    };
+
+    const fetchFavorites = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/libraries/favorites', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setFavorites(response.data.map(library => library.id));
+      } catch (error) {
+        console.error('Error fetching favorites:', error);
+      }
+    };
+
+    fetchLibraries();
+    fetchCurrentUser();
+    fetchFavorites();
+  }, []);
+
+  const handleSearch = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleViewLibrary = async (libraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5001/api/libraries/${libraryId}/papers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setSelectedLibrary(libraryId);
+      setPapers(response.data);
+    } catch (error) {
+      console.error('Error fetching papers:', error);
+    }
+  };
+
+  const handleBackToLibraries = () => {
+    setSelectedLibrary(null);
+    setPapers([]);
+  };
+
+  const handleFavoriteLibrary = async (libraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5001/api/libraries/${libraryId}/favorite`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setFavorites([...favorites, libraryId]);
+    } catch (error) {
+      console.error('Error favoriting library:', error);
+    }
+  };
+
+  const toggleOptions = (paperId) => {
+    setShowOptions(showOptions === paperId ? null : paperId);
+  };
+
+  const handleViewComments = (paperId) => {
+    window.location.href = `/comments/${paperId}`;
+  };
+
+  const filteredLibraries = libraries.filter(library =>
+    library.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="all-libraries-container">
+      {!selectedLibrary ? (
+        <>
+          <h1>All Libraries</h1>
+          <div className="all-libraries-search-container">
+            <input
+              type="text"
+              placeholder="Search libraries..."
+              value={searchQuery}
+              onChange={handleSearch}
+              className="all-libraries-search-input"
+            />
+            <button className="all-libraries-search-button">Search</button>
+          </div>
+          <div className="all-libraries-list">
+            {filteredLibraries.map((library) => (
+              <div key={library.id} className="all-libraries-item">
+                <div className="all-libraries-item-content">
+                  <h3>{library.name}</h3>
+                  <p><strong>Owner:</strong> user{library.userId}</p>
+                </div>
+                <div className="all-libraries-item-actions">
+                  <button className="view-button" onClick={() => handleViewLibrary(library.id)}>View</button>
+                  {library.permission === 'Shared' && library.userId !== currentUserId && (
+                    favorites.includes(library.id) ? (
+                      <button className="favorite-button" disabled>Favorited</button>
+                    ) : (
+                      <button className="favorite-button" onClick={() => handleFavoriteLibrary(library.id)}>Favorite</button>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="all-papers-container">
+          <h2>Library Papers</h2>
+          <div className="back-button-container">
+            <button className="back-button" onClick={handleBackToLibraries}>Back to Libraries</button>
+          </div>
+          <div className="all-papers-list">
+            {papers.map((paper) => (
+              <div key={paper.id} className="all-papers-item">
+                <div className="all-papers-paper-content">
+                  <h2>{paper.title}</h2>
+                  {paper.author && <p><strong>Author:</strong> {paper.author}</p>}
+                  {paper.keywords && <p><strong>Keywords:</strong> {paper.keywords}</p>}
+                </div>
+                <div className="all-papers-options-container">
+                  <button className="options-button" onClick={() => toggleOptions(paper.id)}>Options</button>
+                  {showOptions === paper.id && (
+                    <div className="all-papers-options-dropdown">
+                      <button className="view-paper-button" onClick={() => window.open(`http://localhost:5001/api/papers/pdf/${paper.id}`, '_blank')}>View Paper</button>
+                      <button className="comment-button" onClick={() => handleViewComments(paper.id)}>Comment</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AllLibraries;
+
+
+AllPapers.css:
+.all-papers-container {
+  padding: 20px;
+}
+
+.all-papers-container h1 {
+  color: #333;
+  font-size: 32px;
+  margin-bottom: 20px;
+}
+
+.all-papers-search-container {
+  margin-bottom: 20px;
+}
+
+.all-papers-search-container input {
+  padding: 10px;
+  font-size: 16px;
+  margin-right: 10px;
+  background: transparent;
+  border: 1px solid rgb(218, 218, 218);
+  color: black; /* 确保输入文字为黑色 */
+}
+
+.all-papers-search-container input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.all-papers-search-container button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+
+.all-papers-search-container button:hover {
+  background-color: #fc5c7d;
+}
+
+.all-papers-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.all-papers-item {
+  background: rgba(255, 255, 255, 0.5); /* 半透明白色 */
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  color: black; /* 确保文字为黑色 */
+  display: flex;
+  justify-content: space-between; /* 将 options-button 移到右侧 */
+  align-items: center; /* 确保内容垂直居中 */
+}
+
+.all-papers-item h2 {
+  margin-bottom: 5px; /* 标题和其他内容之间的间距 */
+}
+
+.all-papers-item p {
+  margin-bottom: 5px; /* 作者和关键字之间的间距 */
+}
+
+.all-papers-options-container {
+  position: relative;
+}
+
+.all-papers-options-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.all-papers-options-button:hover {
+  background-color: #fc5c7d;
+}
+
+.all-papers-options-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  z-index: 1;
+}
+
+.all-papers-options-dropdown .all-papers-view-paper-button,
+.all-papers-options-dropdown .all-papers-delete-paper-button {
+  background-color: #ff4d4d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.all-papers-options-dropdown .all-papers-view-paper-button:hover,
+.all-papers-options-dropdown .all-papers-delete-paper-button:hover {
+  background-color: #ff1a1a;
+}
+
+.all-papers-empty-message {
+  color: #333;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+
+AllPapers.js:
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import './AllPapers.css';
+
+const AllPapers = () => {
+  const [papers, setPapers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [showOptions, setShowOptions] = useState(null);
+  const optionsRef = useRef([]);
+
+  useEffect(() => {
+    const fetchPapers = async () => {
+      try {
+        const response = await axios.get('http://localhost:5001/api/papers');
+        setPapers(response.data);
+      } catch (error) {
+        console.error('Error fetching papers:', error);
+      }
+    };
+
+    fetchPapers();
+
+    const handleClickOutside = (event) => {
+      if (!optionsRef.current.some(ref => ref && ref.contains(event.target))) {
+        setShowOptions(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSearch = async () => {
+    try {
+      const response = await axios.get(`http://localhost:5001/api/papers/search?search=${search}`);
+      setPapers(response.data);
+    } catch (error) {
+      console.error('Error searching papers:', error);
+    }
+  };
+
+  const toggleOptions = (paperId) => {
+    setShowOptions(showOptions === paperId ? null : paperId);
+  };
+
+  const viewPaper = (pdfPath) => {
+    window.open(`http://localhost:5001/${pdfPath}`, '_blank');
+  };
+
+  const handleViewComments = (paperId) => {
+    window.location.href = `/comments/${paperId}`;
+  };
+
+  return (
+    <div className="all-papers-container">
+      <h1>All Papers</h1>
+      <div className="all-papers-search-container">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search papers..."
+        />
+        <button onClick={handleSearch}>Search</button>
+      </div>
+      <div className="all-papers-list">
+        {papers.length === 0 ? (
+          <p className="all-papers-empty-message">No papers found</p>
+        ) : (
+          papers.map((paper, index) => (
+            <div key={paper.id} className="all-papers-item">
+              <div className="all-papers-paper-content">
+                <h2>{paper.title}</h2>
+                {paper.author && <p><strong>Author:</strong> {paper.author}</p>}
+                {paper.keywords && <p><strong>Keywords:</strong> {paper.keywords}</p>}
+              </div>
+              <div className="all-papers-options-container" ref={el => optionsRef.current[index] = el}>
+                <button className="all-papers-options-button" onClick={() => toggleOptions(paper.id)}>Options</button>
+                {showOptions === paper.id && (
+                  <div className="all-papers-options-dropdown">
+                    <button className="all-papers-view-paper-button" onClick={() => viewPaper(paper.pdfPath)}>View Paper</button>
+                    <button className="all-papers-comment-button" onClick={() => handleViewComments(paper.id)}>Comment</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AllPapers;
+
+
+App.js:
+import React from 'react';
+import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
+import Home from './Home';
+import Auth from './components/Auth';
+import Dashboard from './Dashboard';
+import MyLibraries from './MyLibraries';
+import AllPapers from './AllPapers';
+import AddPaper from './AddPaper';
+import EditPaper from './EditPaper';
+import AllLibraries from './AllLibraries'; // 新增 AllLibraries 组件导入
+import Comments from './Comments'; // 新增 Comments 组件导入
+
+const PrivateRoute = ({ component: Component, ...rest }) => {
+  const isAuthenticated = !!localStorage.getItem('token');
+  return (
+    <Route
+      {...rest}
+      render={(props) =>
+        isAuthenticated ? (
+          <Component {...props} />
+        ) : (
+          <Redirect to="/auth" />
+        )
+      }
+    />
+  );
+};
+
+const App = () => {
+  return (
+    <Router>
+      <Switch>
+        <Route exact path="/" component={Home} />
+        <Route path="/auth" component={Auth} />
+        <PrivateRoute path="/dashboard" component={Dashboard} />
+        <PrivateRoute path="/my-libraries" component={MyLibraries} />
+        <PrivateRoute path="/all-papers" component={AllPapers} />
+        <PrivateRoute path="/all-libraries" component={AllLibraries} /> {/* 新增 All Libraries 路由 */}
+        <PrivateRoute path="/add-paper" component={AddPaper} />
+        <PrivateRoute path="/edit-paper/:paperId" component={EditPaper} />
+        <PrivateRoute path="/comments/:paperId" component={Comments} /> {/* 新增 Comments 路由 */}
+      </Switch>
+    </Router>
+  );
+};
+
+export default App;
+
+
+Comments.css:
+.comments-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.comments-container h1 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.comments-list {
+  flex: 1;
+  margin-bottom: 20px;
+  overflow-y: auto;
+}
+
+.comment-item {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  color: black;
+}
+
+.add-comment-container {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+}
+
+.add-comment-container textarea {
+  padding: 10px;
+  font-size: 16px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  resize: vertical;
+}
+
+.add-comment-container button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 12px 22px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.add-comment-container button:hover {
+  background-color: #fc5c7d;
+}
+
+
+Comments.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useParams } from 'react-router-dom';
+import './Comments.css';
+
+const Comments = () => {
+  const { paperId } = useParams();
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5001/api/comments/${paperId}`);
+        setComments(response.data);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      }
+    };
+
+    fetchComments();
+  }, [paperId]);
+
+  const handleAddComment = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        'http://localhost:5001/api/comments',
+        {
+          content: newComment,
+          paperId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setComments([response.data.comment, ...comments]); // 将新评论添加到顶部
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
+  return (
+    <div className="comments-container">
+      <h1>Comments</h1>
+      <div className="comments-list">
+        {comments.map((comment) => (
+          <div key={comment.id} className="comment-item">
+            <p><strong>user{comment.userId}:</strong> {comment.content}</p>
+          </div>
+        ))}
+      </div>
+      <div className="add-comment-container">
+        <textarea
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Add a comment..."
+        />
+        <button onClick={handleAddComment}>Submit</button>
+      </div>
+    </div>
+  );
+};
+
+export default Comments;
+
+
+Dashboard.css:
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: #333;
+  padding: 20px;
+  height: 100%;
+  position: fixed;
+  left: 0;
+  top: 0;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  color: white;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar ul li {
+  margin: 20px 0;
+}
+
+.sidebar ul li a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  display: block;
+  padding: 10px 0;
+}
+
+.content {
+  margin-left: 250px;
+  padding: 20px;
+  width: calc(100% - 250px);
+  overflow-y: auto;
+}
+
+.logout-button {
+  background-color: #ff7e5f;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 25px;
+  margin-top: 20px;
+  transition: background-color 0.3s;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.logout-button:hover {
+  background-color: #feb47b;
+}
+
+.alllibraries-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-left: 10px;
+}
+
+.alllibraries-button:hover {
+  background-color: #fc5c7d;
+}
+
+.user-id-display {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  background-color: #f4f4f4;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  color: #333;
+}
+
+
+Dashboard.js:
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Route, Switch, Link, useHistory } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode'; // 正确导入命名导出
+import './Dashboard.css';
+import MyLibraries from './MyLibraries';
+import AllPapers from './AllPapers';
+import AllLibraries from './AllLibraries';
+
+const Dashboard = () => {
+  const history = useHistory();
+  const [userId, setUserId] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      history.push('/auth');
+    } else {
+      try {
+        const decodedToken = jwtDecode(token);
+        console.log('Decoded Token:', decodedToken); // 调试输出解码后的令牌
+        setUserId(decodedToken.userId);
+      } catch (error) {
+        console.error('Failed to decode token:', error);
+        history.push('/auth');
+      }
+    }
+  }, [history]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    alert('You have been logged out.');
+    history.push('/auth');
+  };
+
+  return (
+    <Router>
+      <div className="dashboard-container">
+        <div className="sidebar">
+          <h2>Menu</h2>
+          <ul>
+            <li><Link to="/my-libraries">My Libraries</Link></li>
+            <li><Link to="/all-papers">All Papers</Link></li>
+            <li><Link to="/all-libraries">All Libraries</Link></li>
+          </ul>
+          <button onClick={handleLogout} className="logout-button">Logout</button>
+        </div>
+        <div className="content">
+          <Switch>
+            <Route path="/my-libraries" component={MyLibraries} />
+            <Route path="/all-papers" component={AllPapers} />
+            <Route path="/all-libraries" component={AllLibraries} />
+            <Route path="/" exact>
+              <h1>Welcome to your Dashboard</h1>
+            </Route>
+          </Switch>
+        </div>
+        {userId && (
+          <div className="user-id-display">
+            User ID: {userId}
+          </div>
+        )}
+      </div>
+    </Router>
+  );
+};
+
+export default Dashboard;
+
+
+EditPaper.css:
+body {
+  background: #9ab585; /* 页面背景颜色，这里可以修改 */
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-paper-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+  position: relative;
+  width: 100%;
+  margin-top: -40px;
+}
+
+.edit-paper-title {
+  color: #333;
+  position: fixed;
+  top: 15px; /* 设置距离顶部的距离 */
+  left: 20px; /* 设置距离左侧的距离 */
+  font-size: 24px; /* 设置字体大小 */
+  font-weight: bold; /* 设置字体加粗 */
+  z-index: 2; /* 确保标题在最前面 */
+  margin-top: 20px; /* 增大间距 */
+  margin-left: 15px;
+}
+
+.share-input {
+  margin-left: 10px; /* 让输入框在分享按钮的右侧 */
+  padding: 10px;
+  font-size: 16px;
+  height: 40px; /* 设置与Share按钮相同的高度 */
+  background: transparent;
+  border: 1px solid rgb(218, 218, 218);
+  color: black; /* 确保输入文字为黑色 */
+  border-radius: 5px;
+  box-sizing: border-box; /* 确保padding不会影响高度 */
+}
+
+.share-input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.share-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-left: 10px;
+}
+
+.share-button:hover {
+  background-color: #fc5c7d;
+}
+
+.share-list-title {
+  color: #333;
+  margin-top: 25px; /* 调整位置，使其与import按钮和share按钮之间的距离一致 */
+  margin-bottom: 10px;
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.shared-users {
+  margin-top: 5px; /* 确保与share-list按钮有一定间距 */
+  margin-bottom: 20px;
+}
+
+.shared-user {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 5px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  width: calc(150% - 30px);
+  height: 40px;
+  margin-left: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.delete-share-user-button {
+  background: #ff4d4d;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.save-button {
+  position: fixed;
+  bottom: 0px;
+  right: 20px;
+  z-index: 1;
+}
+
+.quill-editor {
+  height: calc(100vh - 140px); /* 调整高度，使其顶部和底部空间更大 */
+  width: 100%;
+  margin-top: 0; /* 让富文本编辑框顶部靠上一些 */
+  margin-bottom: 0; /* 让富文本编辑框底部靠下一些 */
+}
+
+.share-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: fixed;
+  top: 100px; /* 向上移动30px */
+  left: 25px;
+  z-index: 1;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+}
+
+.share-button-container {
+  display: flex;
+  align-items: center;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+}
+
+.refuse-access {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 24px;
+  font-weight: bold;
+  color: red;
+}
+
+
+EditPaper.js:
+import React, { useEffect, useState, useRef } from 'react';
+import axios from 'axios';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import './EditPaper.css'; // 确保引入了CSS文件
+import io from 'socket.io-client';
+
+const EditPaper = ({ match }) => {
+  const [content, setContent] = useState('');
+  const [shareInput, setShareInput] = useState('');
+  const [sharedUsers, setSharedUsers] = useState([]);
+  const [isOwner, setIsOwner] = useState(false);
+  const [canEdit, setCanEdit] = useState(false); // 新增变量判断是否可以编辑
+  const { paperId } = match.params;
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    const fetchPaperContent = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`http://localhost:5001/api/papers/content/${paperId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setIsOwner(response.data.isOwner);
+        setCanEdit(response.data.isOwner || response.data.isSharedUser);
+
+        if (response.data.isOwner || response.data.isSharedUser) {
+          setContent(response.data.content);
+        }
+      } catch (error) {
+        console.error('Error fetching paper content:', error);
+      }
+    };
+  
+    fetchPaperContent();
+    fetchSharedUsers();
+  
+    socketRef.current = io('http://localhost:5001');
+    socketRef.current.emit('joinPaper', paperId);
+  
+    socketRef.current.on('contentUpdate', (newContent) => {
+      setContent(newContent);
+    });
+  
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, [paperId]);  
+
+  const fetchSharedUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5001/api/papers/share-list/${paperId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setSharedUsers(response.data.sharedUsers || []);
+    } catch (error) {
+      console.error('Error fetching share list:', error);
+      alert('Failed to fetch share list.');
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5001/api/papers/save`, {
+        paperId,
+        content,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Content saved to DOCX and converted to PDF successfully!');
+    } catch (error) {
+      console.error('Error saving content to DOCX and converting to PDF:', error);
+      alert('Failed to save content to DOCX and convert to PDF.');
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5001/api/papers/share`, {
+        paperId,
+        userId: shareInput,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setSharedUsers([...sharedUsers, shareInput]);
+      setShareInput('');
+    } catch (error) {
+      console.error('Error sharing paper:', error);
+      alert('Failed to share paper.');
+    }
+  };
+
+  const handleDeleteShareUser = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5001/api/papers/unshare`, {
+        paperId,
+        userId,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setSharedUsers(sharedUsers.filter(user => user !== userId));
+    } catch (error) {
+      console.error('Error unsharing paper:', error);
+      alert('Failed to unshare paper.');
+    }
+  };
+
+  const handleContentChange = (newContent) => {
+    setContent(newContent);
+    socketRef.current.emit('contentChange', { paperId, content: newContent });
+  };
+
+  if (!canEdit) {
+    return <div className="refuse-access">Access Denied</div>; // 拒绝访问页面
+  }
+
+  return (
+    <div className="edit-paper-container">
+      <div className="edit-paper-title">Edit Paper</div> {/* 添加标题 */}
+      {isOwner && (
+        <div className="share-container">
+          <div className="share-button-container">
+            <button onClick={handleShare} className="share-button">Share</button>
+            <input
+              type="text"
+              value={shareInput}
+              onChange={(e) => setShareInput(e.target.value)}
+              className="share-input"
+              placeholder="Enter user id to share" /* 在输入框内添加提示语句 */
+            />
+          </div>
+          <div className="share-list-title">Share List</div>
+          <div className="shared-users">
+            {sharedUsers.map((user, index) => (
+              <div key={index} className="shared-user">
+                user{user}
+                <button
+                  className="delete-share-user-button"
+                  onClick={() => handleDeleteShareUser(user)}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <ReactQuill value={content} onChange={handleContentChange} className="quill-editor" />
+      {isOwner && <button onClick={handleSave} className="save-button">Save</button>}
+    </div>
+  );
+};
+
+export default EditPaper;
+
+
+Home.css:
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .home-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    width: 100vw;
+  }
+  
+  .home-content {
+    text-align: center;
+  }
+  
+  .home-button {
+    background-color: #ff7e5f;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 25px;
+    margin-top: 20px;
+    transition: background-color 0.3s;
+  }
+  
+  .home-button:hover {
+    background-color: #feb47b;
+  }
+  
+
+Home.js:
+import React from 'react';
+import { useHistory } from 'react-router-dom';
+import './Home.css';
+
+const Home = () => {
+  const history = useHistory();
+
+  const handleButtonClick = () => {
+    history.push('/auth'); // 跳转到登录或注册页面
+  };
+
+  return (
+    <div className="home-container">
+      <div className="home-content">
+        <h1>Welcome to Paper Management System</h1>
+        <button onClick={handleButtonClick} className="home-button">Login or Register</button>
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+
+
+index.js:
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+MyLibraries.css:
+.my-libraries-container {
+  padding: 20px;
+}
+
+.my-libraries-container h1 {
+  color: #333;
+  margin-bottom: 30px;
+}
+
+.my-libraries-button-container {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.my-libraries-add-paper-button,
+.my-libraries-view-libraries-button,
+.my-libraries-save-button,
+.my-libraries-upload-button,
+.my-libraries-add-library-button,
+.my-libraries-save-library-button,
+.my-libraries-back-to-libraries-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.my-libraries-add-paper-button:hover,
+.my-libraries-view-libraries-button:hover,
+.my-libraries-save-button:hover,
+.my-libraries-upload-button:hover,
+.my-libraries-add-library-button:hover,
+.my-libraries-save-library-button:hover,
+.my-libraries-back-to-libraries-button:hover {
+  background-color: #fc5c7d;
+}
+
+.my-libraries-editor-container {
+  margin-top: 20px;
+}
+
+.my-libraries-title-input,
+.my-libraries-author-input,
+.my-libraries-keywords-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: black;
+  background-color: transparent;
+}
+
+.my-libraries-title-input::placeholder,
+.my-libraries-author-input::placeholder,
+.my-libraries-keywords-input::placeholder {
+  color: black;
+}
+
+.my-libraries-pdf-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 15px;
+  color: black;
+  background-color: transparent;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.my-libraries-error {
+  color: red;
+  margin-top: 10px;
+}
+
+.my-libraries-list {
+  margin-top: 20px;
+}
+
+.my-libraries-item {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  color: black;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.my-libraries-item.opaque {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+.my-libraries-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.my-libraries-add-library-form {
+  margin-top: 20px;
+}
+
+.my-libraries-add-library-form input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: black;
+  background-color: transparent;
+}
+
+.my-libraries-add-library-form input::placeholder {
+  color: black;
+}
+
+.my-libraries-papers-container {
+  margin-top: 20px;
+}
+
+.my-libraries-papers-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-libraries-paper-item {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: black;
+}
+
+.my-libraries-paper-content {
+  max-width: 80%;
+}
+
+.my-libraries-paper-content h2 {
+  margin-bottom: 10px;
+}
+
+.my-libraries-paper-content p {
+  margin-bottom: 10px;
+}
+
+.my-libraries-options-container {
+  position: relative;
+}
+
+.my-libraries-view-button,
+.my-libraries-privacy-button,
+.my-libraries-options-button,
+.my-libraries-unfavorite-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-left: 5px;
+  height: 30px; /* Ensure the height is consistent */
+}
+
+.my-libraries-view-button:hover,
+.my-libraries-privacy-button:hover,
+.my-libraries-options-button:hover,
+.my-libraries-comment-button:hover,
+.my-libraries-unfavorite-button:hover {
+  background-color: #fc5c7d;
+}
+
+.my-libraries-options-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  z-index: 1;
+}
+
+.my-libraries-options-dropdown .my-libraries-view-paper-button,
+.my-libraries-options-dropdown .my-libraries-delete-paper-button,
+.my-libraries-options-dropdown .my-libraries-move-paper-button,
+.my-libraries-options-dropdown .my-libraries-edit-paper-button,
+.my-libraries-options-dropdown .my-libraries-delete-library-button,
+.my-libraries-options-dropdown .my-libraries-privacy-option,
+.my-libraries-information-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  width: 100%;
+  margin-bottom: 0px;
+}
+
+.my-libraries-options-dropdown .my-libraries-view-paper-button:hover,
+.my-libraries-options-dropdown .my-libraries-delete-paper-button:hover,
+.my-libraries-options-dropdown .my-libraries-move-paper-button:hover,
+.my-libraries-options-dropdown .my-libraries-edit-paper-button:hover,
+.my-libraries-options-dropdown .my-libraries-delete-library-button:hover,
+.my-libraries-options-dropdown .my-libraries-privacy-option:hover,
+.my-libraries-information-button:hover {
+  background-color: #fc5c7d;
+}
+
+.my-libraries-information-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px; /* Ensure the font size is consistent */
+  cursor: pointer;
+  border-radius: 5px;
+  width: 100%;
+  margin-bottom: 0px;
+}
+
+.my-libraries-comment-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-left: 0px;
+  width: 100%; /* Ensure the width is consistent */
+}
+
+.my-libraries-comment-button:hover {
+  background-color: #fc5c7d;
+}
+
+.my-libraries-empty-message {
+  color: #333;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.my-libraries-back-to-libraries-button {
+  margin-top: 20px;
+}
+
+.my-libraries-edit-paper-container {
+  padding: 20px;
+  margin: auto;
+  max-width: 800px;
+}
+
+.my-libraries-edit-paper-container h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.favorited-library {
+  background: rgba(255, 255, 0, 0.5);
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  color: black;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+MyLibraries.js:
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { useHistory } from 'react-router-dom';
+import './MyLibraries.css';
+
+const MyLibraries = () => {
+  const history = useHistory();
+  const [isEditorVisible, setIsEditorVisible] = useState(false);
+  const [isLibraryVisible, setIsLibraryVisible] = useState(true);
+  const [isAddLibraryVisible, setIsAddLibraryVisible] = useState(false);
+  const [isSaveToLibraryVisible, setIsSaveToLibraryVisible] = useState(false);
+  const [isEditInfoVisible, setIsEditInfoVisible] = useState(false);
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+  const [error, setError] = useState(null);
+  const [papers, setPapers] = useState([]);
+  const [libraries, setLibraries] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const [selectedLibrary, setSelectedLibrary] = useState('');
+  const [newLibraryName, setNewLibraryName] = useState('');
+  const [showOptions, setShowOptions] = useState(null);
+  const [showLibraryOptions, setShowLibraryOptions] = useState(null);
+  const [showPrivacyOptions, setShowPrivacyOptions] = useState(null);
+  const [isMoveVisible, setIsMoveVisible] = useState(false);
+  const [selectedPaperId, setSelectedPaperId] = useState(null);
+  const [libraryPrivacy, setLibraryPrivacy] = useState({});
+  const [editingPaperId, setEditingPaperId] = useState(null);
+
+  const optionsRef = useRef([]);
+  const libraryOptionsRef = useRef([]);
+  const privacyOptionsRef = useRef([]);
+
+  useEffect(() => {
+    const fetchLibraries = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/libraries/mylibraries', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setLibraries(response.data);
+        const initialPrivacy = response.data.reduce((acc, library) => {
+          acc[library.id] = library.permission || 'Public';
+          return acc;
+        }, {});
+        setLibraryPrivacy(initialPrivacy);
+      } catch (error) {
+        console.error('Error fetching libraries:', error);
+      }
+    };
+
+    const fetchFavorites = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5001/api/libraries/favorites', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setFavorites(response.data);
+      } catch (error) {
+        console.error('Error fetching favorites:', error);
+      }
+    };
+
+    fetchLibraries();
+    fetchFavorites();
+
+    const handleClickOutside = (event) => {
+      if (!optionsRef.current.some(ref => ref && ref.contains(event.target))) {
+        setShowOptions(null);
+      }
+      if (!libraryOptionsRef.current.some(ref => ref && ref.contains(event.target))) {
+        setShowLibraryOptions(null);
+      }
+      if (!privacyOptionsRef.current.some(ref => ref && ref.contains(event.target))) {
+        setShowPrivacyOptions(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleAddPaper = () => {
+    clearInfoInputs();
+    setIsEditorVisible(true);
+    setIsLibraryVisible(false);
+    setIsAddLibraryVisible(false);
+    setIsSaveToLibraryVisible(false);
+    setIsEditInfoVisible(false);
+  };
+
+  const handleViewLibraries = () => {
+    setIsLibraryVisible(true);
+    setIsEditorVisible(false);
+    setIsSaveToLibraryVisible(false);
+    setSelectedLibrary('');
+    setPapers([]);
+    clearInfoInputs();
+  };
+
+  const handleSave = async () => {
+    if (!selectedLibrary) {
+      alert('Please select a library');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('author', author);
+    formData.append('keywords', keywords);
+    formData.append('permissions', 'private');
+    formData.append('libraryId', selectedLibrary);
+    if (pdfFile) {
+      formData.append('pdf', pdfFile);
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('http://localhost:5001/api/papers', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      alert('Paper saved successfully!');
+      setTitle('');
+      setAuthor('');
+      setKeywords('');
+      setPdfFile(null);
+      setError(null);
+      setIsSaveToLibraryVisible(false);
+      setIsEditorVisible(true);
+    } catch (error) {
+      console.error('Error saving paper:', error);
+      setError('Failed to save paper.');
+    }
+  };
+
+  const handlePdfChange = (e) => {
+    setPdfFile(e.target.files[0]);
+  };
+
+  const handleAddLibrary = async () => {
+    if (!newLibraryName) {
+      setError('Library name cannot be empty.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('http://localhost:5001/api/libraries', {
+        name: newLibraryName
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Library created successfully!');
+      setIsAddLibraryVisible(false);
+      setNewLibraryName('');
+      setError(null);
+      const response = await axios.get('http://localhost:5001/api/libraries/mylibraries', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setLibraries(response.data);
+    } catch (error) {
+      console.error('Error creating library:', error);
+      setError('Failed to create library.');
+    }
+  };
+
+  const handleViewLibrary = async (libraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5001/api/libraries/${libraryId}/papers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setPapers(response.data);
+      setSelectedLibrary(libraryId);
+      setIsLibraryVisible(false);
+      setIsEditorVisible(false);
+      setIsAddLibraryVisible(false);
+    } catch (error) {
+      console.error('Error fetching papers:', error);
+    }
+  };
+
+  const handleSaveToLibrary = (libraryId) => {
+    setSelectedLibrary(libraryId);
+  };
+
+  const handleBackToLibraries = () => {
+    setIsLibraryVisible(true);
+    setPapers([]);
+    setSelectedLibrary('');
+    setIsEditInfoVisible(false);
+    clearInfoInputs();
+  };
+
+  const handleDeletePaper = async (paperId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5001/api/papers/${paperId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Paper deleted successfully!');
+      handleViewLibrary(selectedLibrary);
+    } catch (error) {
+      console.error('Error deleting paper:', error);
+      setError('Failed to delete paper.');
+    }
+  };
+
+  const handleDeleteLibrary = async (libraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5001/api/libraries/${libraryId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Library deleted successfully!');
+      const response = await axios.get('http://localhost:5001/api/libraries/mylibraries', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setLibraries(response.data);
+      setSelectedLibrary('');
+      setPapers([]);
+      setIsLibraryVisible(true);
+    } catch (error) {
+      console.error('Error deleting library:', error);
+      setError('Failed to delete library.');
+    }
+  };
+
+  const handleMovePaper = (paperId) => {
+    setSelectedPaperId(paperId);
+    setIsMoveVisible(true);
+  };
+
+  const handleConfirmMove = async (targetLibraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://localhost:5001/api/papers/${selectedPaperId}/move`, { libraryId: targetLibraryId }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Paper moved successfully!');
+      setIsMoveVisible(false);
+      handleViewLibrary(selectedLibrary);
+    } catch (error) {
+      console.error('Error moving paper:', error);
+      setError('Failed to move paper.');
+    }
+  };
+
+  const handleEditPaper = (paperId) => {
+    window.open(`http://localhost:3000/edit-paper/${paperId}`, '_blank');
+  };
+
+  const handleEditInfo = async (paperId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5001/api/papers/${paperId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setTitle(response.data.title);
+      setAuthor(response.data.author);
+      setKeywords(response.data.keywords);
+      setEditingPaperId(paperId);
+      setIsEditInfoVisible(true);
+      setIsLibraryVisible(false);
+      setIsEditorVisible(false);
+      setIsAddLibraryVisible(false);
+    } catch (error) {
+      console.error('Error fetching paper info:', error);
+    }
+  };
+
+  const handleSaveInfo = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://localhost:5001/api/papers/${editingPaperId}`, {
+        title,
+        author,
+        keywords
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Paper information updated successfully!');
+      setTitle('');
+      setAuthor('');
+      setKeywords('');
+      setEditingPaperId(null);
+      setIsEditInfoVisible(false);
+      handleViewLibrary(selectedLibrary);
+    } catch (error) {
+      console.error('Error updating paper info:', error);
+      setError('Failed to update paper info.');
+    }
+  };
+
+  const handleUnfavoriteLibrary = async (libraryId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5001/api/libraries/${libraryId}/unfavorite`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      alert('Library unfavorited successfully!');
+      setFavorites(favorites.filter(library => library.id !== libraryId));
+    } catch (error) {
+      console.error('Error unfavoriting library:', error);
+    }
+  };
+
+  const toggleOptions = (paperId) => {
+    setShowOptions(showOptions === paperId ? null : paperId);
+  };
+
+  const toggleLibraryOptions = (libraryId, event) => {
+    event.stopPropagation();
+    setShowLibraryOptions(showLibraryOptions === libraryId ? null : libraryId);
+  };
+
+  const togglePrivacyOptions = (libraryId, event) => {
+    event.stopPropagation();
+    setShowPrivacyOptions(showPrivacyOptions === libraryId ? null : libraryId);
+  };
+
+  const handleLibraryPrivacyChange = async (libraryId, newPrivacy) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://localhost:5001/api/libraries/${libraryId}`, { permission: newPrivacy }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setLibraryPrivacy({ ...libraryPrivacy, [libraryId]: newPrivacy });
+      setShowPrivacyOptions(null);
+    } catch (error) {
+      console.error('Error updating library privacy:', error);
+      alert('Failed to update library privacy.');
+    }
+  };
+
+  const clearInfoInputs = () => {
+    setTitle('');
+    setAuthor('');
+    setKeywords('');
+  };
+
+  const handleViewComments = (paperId) => {
+    history.push(`/comments/${paperId}`);
+  };
+
+  const handleViewPaper = (paperId) => {
+    window.open(`http://localhost:5001/api/papers/pdf/${paperId}`, '_blank');
+    setIsEditInfoVisible(false);
+  };
+
+  return (
+    <div className="my-libraries-container">
+      <h1>My Libraries</h1>
+      <div className="my-libraries-button-container">
+        <button className="my-libraries-add-paper-button" onClick={handleAddPaper}>
+          Add Paper
+        </button>
+        <button className="my-libraries-view-libraries-button" onClick={handleViewLibraries}>
+          View Libraries
+        </button>
+      </div>
+      {isLibraryVisible && (
+        <div className="my-libraries-list">
+          {libraries.map((library, index) => (
+            <div
+              key={library.id}
+              className={`my-libraries-item ${selectedLibrary === library.id ? 'selected' : ''}`}
+              style={{ color: 'black' }}
+            >
+              <div className="my-libraries-library-content">
+                <h3>{library.name}</h3>
+              </div>
+              <div className="my-libraries-options-container" ref={el => libraryOptionsRef.current[index] = el}>
+                <button className="my-libraries-view-button" onClick={() => handleViewLibrary(library.id)}>View</button>
+                <button className="my-libraries-privacy-button" onClick={(event) => togglePrivacyOptions(library.id, event)}>
+                  {libraryPrivacy[library.id] || 'Public'}
+                </button>
+                <button className="my-libraries-options-button" onClick={(event) => toggleLibraryOptions(library.id, event)}>Options</button>
+                {showPrivacyOptions === library.id && (
+                  <div className="my-libraries-options-dropdown" ref={el => privacyOptionsRef.current[index] = el}>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Private')}>Private</button>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Public')}>Public</button>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Shared')}>Shared</button>
+                  </div>
+                )}
+                {showLibraryOptions === library.id && (
+                  <div className="my-libraries-options-dropdown">
+                    <button className="my-libraries-delete-library-button" onClick={() => handleDeleteLibrary(library.id)}>Delete</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {favorites.map((library, index) => (
+            <div
+              key={library.id}
+              className={`my-libraries-item favorited-library ${selectedLibrary === library.id ? 'selected' : ''}`}
+              style={{ color: 'black' }}
+            >
+              <div className="my-libraries-library-content">
+                <h3>{library.name}</h3>
+              </div>
+              <div className="my-libraries-options-container" ref={el => libraryOptionsRef.current[index + libraries.length] = el}>
+                <button className="my-libraries-view-button" onClick={() => handleViewLibrary(library.id)}>View</button>
+                <button className="my-libraries-unfavorite-button" onClick={() => handleUnfavoriteLibrary(library.id)}>Unfavorite</button>
+                <button className="my-libraries-options-button" onClick={(event) => toggleLibraryOptions(library.id, event)}>Options</button>
+                {showPrivacyOptions === library.id && (
+                  <div className="my-libraries-options-dropdown" ref={el => privacyOptionsRef.current[index + libraries.length] = el}>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Private')}>Private</button>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Public')}>Public</button>
+                    <button className="my-libraries-privacy-option" onClick={() => handleLibraryPrivacyChange(library.id, 'Shared')}>Shared</button>
+                  </div>
+                )}
+                {showLibraryOptions === library.id && (
+                  <div className="my-libraries-options-dropdown">
+                    <button className="my-libraries-delete-library-button" onClick={() => handleDeleteLibrary(library.id)}>Delete</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          <button className="my-libraries-add-library-button" onClick={() => setIsAddLibraryVisible(true)}>
+            Add Library
+          </button>
+        </div>
+      )}
+      {isAddLibraryVisible && (
+        <div className="my-libraries-add-library-form">
+          <input
+            type="text"
+            value={newLibraryName}
+            onChange={(e) => setNewLibraryName(e.target.value)}
+            placeholder="Library Name"
+          />
+          <button onClick={handleAddLibrary} className="my-libraries-save-library-button">Save Library</button>
+          {error && <p className="my-libraries-error">{error}</p>}
+        </div>
+      )}
+      {isEditorVisible && (
+        <div className="my-libraries-editor-container">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className="my-libraries-title-input"
+          />
+          <input
+            type="text"
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            placeholder="Author"
+            className="my-libraries-author-input"
+          />
+          <input
+            type="text"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder="Keywords (separated by space)"
+            className="my-libraries-keywords-input"
+          />
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={handlePdfChange}
+            className="my-libraries-pdf-input"
+          />
+          <button onClick={() => setIsSaveToLibraryVisible(true)} className="my-libraries-save-button">Save</button>
+          {error && <p className="my-libraries-error">{error}</p>}
+        </div>
+      )}
+      {isSaveToLibraryVisible && (
+        <div className="my-libraries-list">
+          <p>Select a library to save the paper:</p>
+          {libraries.concat(favorites).map((library) => (
+            <div key={library.id} className={`my-libraries-item ${selectedLibrary === library.id ? 'selected' : ''}`} onClick={() => handleSaveToLibrary(library.id)} style={{ color: 'black' }}>
+              <h3>{library.name}</h3>
+            </div>
+          ))}
+          <button onClick={() => { handleSave(); setIsSaveToLibraryVisible(false); }} className="my-libraries-save-button">Confirm Save</button>
+        </div>
+      )}
+      {isMoveVisible && (
+        <div className="my-libraries-list">
+          <p>Select a library to move the paper to:</p>
+          {libraries
+            .filter(library => library.id !== selectedLibrary)
+            .map((library) => (
+              <div key={library.id} className={`my-libraries-item`} onClick={() => handleConfirmMove(library.id)} style={{ color: 'black' }}>
+                <h3>{library.name}</h3>
+              </div>
+            ))}
+          <button onClick={() => setIsMoveVisible(false)} className="my-libraries-back-to-libraries-button">Cancel</button>
+        </div>
+      )}
+      {isEditInfoVisible && (
+        <div className="my-libraries-editor-container">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className="my-libraries-title-input"
+          />
+          <input
+            type="text"
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            placeholder="Author"
+            className="my-libraries-author-input"
+          />
+          <input
+            type="text"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder="Keywords (separated by space)"
+            className="my-libraries-keywords-input"
+          />
+          <button onClick={handleSaveInfo} className="my-libraries-save-button">Save</button>
+          <button onClick={handleBackToLibraries} className="my-libraries-back-to-libraries-button">Back</button>
+          {error && <p className="my-libraries-error">{error}</p>}
+        </div>
+      )}
+      {selectedLibrary && !isEditorVisible && !isLibraryVisible && !isMoveVisible && !isEditInfoVisible && (
+        <div className="my-libraries-library-papers-container">
+          {papers.length === 0 ? (
+            <p className="my-libraries-empty-message">Empty</p>
+          ) : (
+            <div className="my-libraries-papers-list">
+              {papers.map((paper, index) => (
+                <div key={paper.id} className="my-libraries-paper-item">
+                  <div className="my-libraries-paper-content">
+                    <h2>{paper.title}</h2>
+                    {paper.author && <p><strong>Author:</strong> {paper.author}</p>}
+                    {paper.keywords && <p><strong>Keywords:</strong> {paper.keywords}</p>}
+                  </div>
+                  <div className="my-libraries-options-container" ref={el => optionsRef.current[index] = el}>
+                    <button className="my-libraries-options-button" onClick={() => toggleOptions(paper.id)}>Options</button>
+                    {showOptions === paper.id && (
+                      <div className="my-libraries-options-dropdown">
+                        <button className="my-libraries-view-paper-button" onClick={() => handleViewPaper(paper.id)}>View Paper</button>
+                        <button className="my-libraries-move-paper-button" onClick={() => handleMovePaper(paper.id)}>Move</button>
+                        <button className="my-libraries-edit-paper-button" onClick={() => handleEditPaper(paper.id)}>Edit</button>
+                        <button className="my-libraries-information-button" onClick={() => handleEditInfo(paper.id)}>Information</button>
+                        <button className="my-libraries-comment-button" onClick={() => handleViewComments(paper.id)}>Comment</button>
+                        {paper.ownerId === localStorage.getItem('userId') && (
+                          <button className="my-libraries-delete-paper-button" onClick={() => handleDeletePaper(paper.id)}>Delete</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={handleBackToLibraries} className="my-libraries-back-to-libraries-button">Back to Libraries</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MyLibraries;
+
+
+src文件夹中的components文件夹：
+
+Auth.css:
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #ff9a9e, #fecfef);
+    color: #333;
+    width: 100vw;
+  }
+  
+  .auth-form {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+  }
+  
+  .auth-input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .auth-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 25px;
+    margin-top: 20px;
+    transition: background-color 0.3s;
+    width: 100%;
+  }
+  
+  .auth-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .auth-switch {
+    margin-top: 20px;
+    color: #6a82fb;
+    cursor: pointer;
+  }
+  
+
+Auth.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+import { useHistory } from 'react-router-dom';
+import './Auth.css';
+
+const Auth = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const history = useHistory();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('http://localhost:5001/api/auth/login', { username, password });
+      localStorage.setItem('token', response.data.token);
+      alert('Login successful!');
+      history.push('/dashboard'); // 登录成功后跳转到仪表盘页面
+    } catch (error) {
+      console.error('Login failed:', error.response?.data?.message || error.message);
+      alert('Login failed! ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('http://localhost:5001/api/auth/register', { username, password });
+      setIsLogin(true);
+      alert('Registration successful! Please log in.');
+    } catch (error) {
+      console.error('Registration failed:', error.response?.data?.message || error.message);
+      alert('Registration failed! ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-form">
+        <h2>{isLogin ? 'Login' : 'Register'}</h2>
+        <form onSubmit={isLogin ? handleLogin : handleRegister}>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            required
+            className="auth-input"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            className="auth-input"
+          />
+          <button type="submit" className="auth-button">{isLogin ? 'Login' : 'Register'}</button>
+        </form>
+        <div className="auth-switch" onClick={() => setIsLogin(!isLogin)}>
+          {isLogin ? 'Don\'t have an account? Register' : 'Already have an account? Login'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Auth;
+
+
+Library.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+
+const Library = () => {
+  const [libraries, setLibraries] = useState([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+
+  useEffect(() => {
+    fetchLibraries();
+  }, []);
+
+  const fetchLibraries = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/libraries`);
+      setLibraries(response.data);
+    } catch (error) {
+      console.error('Error fetching libraries', error);
+    }
+  };
+
+  const handleCreateLibrary = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/libraries`,
+        { name, description, isPublic },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setName('');
+      setDescription('');
+      setIsPublic(true);
+      fetchLibraries();
+    } catch (error) {
+      console.error('Error creating library', error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Libraries</h2>
+      <form onSubmit={handleCreateLibrary}>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Library Name"
+          required
+        />
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Library Description"
+        />
+        <label>
+          Public
+          <input
+            type="checkbox"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />
+        </label>
+        <button type="submit">Create Library</button>
+      </form>
+      <div>
+        {libraries.map((library) => (
+          <div key={library.id}>
+            <h3>{library.name}</h3>
+            <p>{library.description}</p>
+            <Link to={`/papers/${library.id}`}>View Papers</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Library;
+
+
+Login.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Login = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('/api/auth/login', { username, password });
+      localStorage.setItem('token', response.data.token);
+      // Redirect to homepage or dashboard
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleLogin}>
+      <input
+        type="text"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Username"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+};
+
+export default Login;
+
+
+Paper.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Link, useParams } from 'react-router-dom';
+
+const Paper = () => {
+  const { libraryId } = useParams();
+  const [papers, setPapers] = useState([]);
+  const [title, setTitle] = useState('');
+  const [abstract, setAbstract] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+
+  useEffect(() => {
+    fetchPapers();
+  }, []);
+
+  const fetchPapers = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/papers/${libraryId}`);
+      setPapers(response.data);
+    } catch (error) {
+      console.error('Error fetching papers', error);
+    }
+  };
+
+  const handleCreatePaper = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('abstract', abstract);
+    formData.append('libraryId', libraryId);
+    formData.append('pdf', pdfFile);
+
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/papers`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setTitle('');
+      setAbstract('');
+      setPdfFile(null);
+      fetchPapers();
+    } catch (error) {
+      console.error('Error creating paper', error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Papers</h2>
+      <form onSubmit={handleCreatePaper}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Paper Title"
+          required
+        />
+        <textarea
+          value={abstract}
+          onChange={(e) => setAbstract(e.target.value)}
+          placeholder="Paper Abstract"
+        />
+        <input
+          type="file"
+          onChange={(e) => setPdfFile(e.target.files[0])}
+          required
+        />
+        <button type="submit">Upload Paper</button>
+      </form>
+      <div>
+        {papers.map((paper) => (
+          <div key={paper.id}>
+            <h3>{paper.title}</h3>
+            <p>{paper.abstract}</p>
+            <a href={`${process.env.REACT_APP_API_URL}/${paper.pdfPath}`} target="_blank" rel="noopener noreferrer">Download PDF</a>
+            <Link to={`/comments/${paper.id}`}>View Comments</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Paper;
+
+
+Register.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Register = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('/api/auth/register', { username, password });
+      // Redirect to login page
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleRegister}>
+      <input
+        type="text"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Username"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Register</button>
+    </form>
+  );
+};
+
+export default Register;
+
+
+frontend文件夹中的src\components文件夹：
+
+components文件夹：
+
+Auth.css:
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #ff9a9e, #fecfef);
+    color: #333;
+    width: 100vw;
+  }
+  
+  .auth-form {
+    background: white;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+  }
+  
+  .auth-input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .auth-button {
+    background-color: #6a82fb;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 25px;
+    margin-top: 20px;
+    transition: background-color 0.3s;
+    width: 100%;
+  }
+  
+  .auth-button:hover {
+    background-color: #fc5c7d;
+  }
+  
+  .auth-switch {
+    margin-top: 20px;
+    color: #6a82fb;
+    cursor: pointer;
+  }
+  
+
+Auth.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+import { useHistory } from 'react-router-dom';
+import './Auth.css';
+
+const Auth = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const history = useHistory();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('http://localhost:5001/api/auth/login', { username, password });
+      localStorage.setItem('token', response.data.token);
+      alert('Login successful!');
+      history.push('/dashboard'); // 登录成功后跳转到仪表盘页面
+    } catch (error) {
+      console.error('Login failed:', error.response?.data?.message || error.message);
+      alert('Login failed! ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('http://localhost:5001/api/auth/register', { username, password });
+      setIsLogin(true);
+      alert('Registration successful! Please log in.');
+    } catch (error) {
+      console.error('Registration failed:', error.response?.data?.message || error.message);
+      alert('Registration failed! ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-form">
+        <h2>{isLogin ? 'Login' : 'Register'}</h2>
+        <form onSubmit={isLogin ? handleLogin : handleRegister}>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            required
+            className="auth-input"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            className="auth-input"
+          />
+          <button type="submit" className="auth-button">{isLogin ? 'Login' : 'Register'}</button>
+        </form>
+        <div className="auth-switch" onClick={() => setIsLogin(!isLogin)}>
+          {isLogin ? 'Don\'t have an account? Register' : 'Already have an account? Login'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Auth;
+
+
+Library.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+
+const Library = () => {
+  const [libraries, setLibraries] = useState([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+
+  useEffect(() => {
+    fetchLibraries();
+  }, []);
+
+  const fetchLibraries = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/libraries`);
+      setLibraries(response.data);
+    } catch (error) {
+      console.error('Error fetching libraries', error);
+    }
+  };
+
+  const handleCreateLibrary = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/libraries`,
+        { name, description, isPublic },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setName('');
+      setDescription('');
+      setIsPublic(true);
+      fetchLibraries();
+    } catch (error) {
+      console.error('Error creating library', error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Libraries</h2>
+      <form onSubmit={handleCreateLibrary}>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Library Name"
+          required
+        />
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Library Description"
+        />
+        <label>
+          Public
+          <input
+            type="checkbox"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />
+        </label>
+        <button type="submit">Create Library</button>
+      </form>
+      <div>
+        {libraries.map((library) => (
+          <div key={library.id}>
+            <h3>{library.name}</h3>
+            <p>{library.description}</p>
+            <Link to={`/papers/${library.id}`}>View Papers</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Library;
+
+
+Login.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Login = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('/api/auth/login', { username, password });
+      localStorage.setItem('token', response.data.token);
+      // Redirect to homepage or dashboard
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleLogin}>
+      <input
+        type="text"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Username"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+};
+
+export default Login;
+
+
+Paper.js:
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Link, useParams } from 'react-router-dom';
+
+const Paper = () => {
+  const { libraryId } = useParams();
+  const [papers, setPapers] = useState([]);
+  const [title, setTitle] = useState('');
+  const [abstract, setAbstract] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
+
+  useEffect(() => {
+    fetchPapers();
+  }, []);
+
+  const fetchPapers = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/papers/${libraryId}`);
+      setPapers(response.data);
+    } catch (error) {
+      console.error('Error fetching papers', error);
+    }
+  };
+
+  const handleCreatePaper = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('abstract', abstract);
+    formData.append('libraryId', libraryId);
+    formData.append('pdf', pdfFile);
+
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/papers`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setTitle('');
+      setAbstract('');
+      setPdfFile(null);
+      fetchPapers();
+    } catch (error) {
+      console.error('Error creating paper', error);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Papers</h2>
+      <form onSubmit={handleCreatePaper}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Paper Title"
+          required
+        />
+        <textarea
+          value={abstract}
+          onChange={(e) => setAbstract(e.target.value)}
+          placeholder="Paper Abstract"
+        />
+        <input
+          type="file"
+          onChange={(e) => setPdfFile(e.target.files[0])}
+          required
+        />
+        <button type="submit">Upload Paper</button>
+      </form>
+      <div>
+        {papers.map((paper) => (
+          <div key={paper.id}>
+            <h3>{paper.title}</h3>
+            <p>{paper.abstract}</p>
+            <a href={`${process.env.REACT_APP_API_URL}/${paper.pdfPath}`} target="_blank" rel="noopener noreferrer">Download PDF</a>
+            <Link to={`/comments/${paper.id}`}>View Comments</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Paper;
+
+
+Register.js:
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const Register = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('/api/auth/register', { username, password });
+      // Redirect to login page
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleRegister}>
+      <input
+        type="text"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Username"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        required
+      />
+      <button type="submit">Register</button>
+    </form>
+  );
+};
+
+export default Register;
+

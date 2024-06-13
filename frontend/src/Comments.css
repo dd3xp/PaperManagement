@@ -1,0 +1,118 @@
+.commentspage-comments-container {
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.commentspage-comments-container h1 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.commentspage-average-rating {
+  font-size: 18px;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.commentspage-comments-grid {
+  display: grid;
+  grid-template-columns: 1fr 2px 1fr; /* 三列布局，中间列为分隔线 */
+  grid-template-rows: 1fr; /* 行高自动调整 */
+  gap: 20px; /* 网格间距 */
+  height: 100%;
+}
+
+.commentspage-add-comment-container {
+  display: flex;
+  flex-direction: column;
+  padding-right: 10px; /* 确保内边距与评论展示部分对齐 */
+  box-sizing: border-box;
+}
+
+.commentspage-rating-container {
+  margin-bottom: 10px;
+}
+
+.commentspage-rating-select {
+  padding: 5px;
+  font-size: 16px;
+  margin-left: 10px;
+  background: transparent;
+}
+
+.commentspage-textarea {
+  width: 750px; /* 设置文本框宽度为容器宽度 */
+  height: 250px; /* 设置文本框高度 */
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.commentspage-rate-button{
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-top: 10px;
+  width: 80px;
+  margin-left: 10px;
+}
+
+.commentspage-submit-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 12px 22px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-top: 10px;
+  width: 120px;
+}
+
+.commentspage-submit-button:hover,
+.commentspage-rate-button:hover {
+  background-color: #fc5c7d;
+}
+
+.commentspage-divider {
+  width: 2px;
+  background-color: #ccc; /* 分隔线颜色 */
+  height: 100%;
+}
+
+.commentspage-comments-list {
+  overflow-y: auto;
+  padding-left: 10px; /* 确保内边距与评论编辑部分对齐 */
+  box-sizing: border-box;
+}
+
+.commentspage-comment-item {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  color: black;
+  word-wrap: break-word; /* 强制长单词换行 */
+  white-space: pre-wrap; /* 保留换行符 */
+}
+
+.commentspage-comment-content {
+  flex: 1;
+  padding-right: 10px; /* 确保内容和删除按钮有间距 */
+}
+
+.commentspage-comment-date {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+}

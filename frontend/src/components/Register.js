@@ -9,7 +9,7 @@ const Register = () => {
     e.preventDefault();
     try {
       const response = await axios.post('/api/auth/register', { username, password });
-      // Redirect to login page
+      
     } catch (error) {
       console.error(error);
     }

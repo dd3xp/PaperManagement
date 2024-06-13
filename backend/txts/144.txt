@@ -1,0 +1,25 @@
+
+
+软件lab1 report 
+ 
+姓名：张景铭 学号：22300246005 日期：2024-4-6 
+ 
+一、 Repository link 
+https://gitee.com/osquisheen_0/qrio_handout 
+ 
+二、 Description 
+本次实验我采用的instruction counter实现方式是通过补充文件中的
+switch-case语句，将case可判定的情况增加为书中介绍的所有的branch，包括
+conditional branch, unconditional branch(immediate), unconditional 
+branch(register)，并对每种branch进行计数处理。 
+ 
+三、 Problem and solving method 
+问题1：在以OP_XX格式作为分支名称加入switch-case语句中后运行
+compile-rio.bat时得到报错。 
+解决方法：在报错页面得知所需的格式为OP_xx，xx小写而非大写，遂改成小写
+后得以解决。 
+问题2：一段时间内首次进入qemu的控制台并退出后得到报错提示 
+qemu-system-aarch64: -hda /root/assets/disk.img: Failed to get "write" lock 
+Is another process using the image [/root/assets/disk.img]? 
+解决方法：重启电脑以终止运行disk.img的相关进程。 
+ 

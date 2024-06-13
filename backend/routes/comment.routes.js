@@ -1,11 +1,20 @@
 const express = require('express');
-const { createComment, getComments } = require('../controllers/comment.controller');
-const authMiddleware = require('../middlewares/auth.middleware');
 const router = express.Router();
+const CommentController = require('../controllers/comment.controller');
+const authMiddleware = require('../middleware/auth');
+const {
+  createComment,
+  getComments,
+  ratePaper
+} = require('../controllers/comment.controller');
 
+// 添加评论路由
 router.post('/', authMiddleware, createComment);
-router.get('/:paperId', getComments);
 
-// Add update and delete routes
+// 获取评论路由
+router.get('/:paperId', authMiddleware, getComments);
+
+// 评分路由
+router.post('/rate', authMiddleware, ratePaper);
 
 module.exports = router;

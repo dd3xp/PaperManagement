@@ -1,0 +1,153 @@
+body {
+  background: #9ab585; /* 页面背景颜色，这里可以修改 */
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-paper-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+  position: relative;
+  width: 100%;
+  margin-top: -40px;
+}
+
+.edit-paper-title {
+  color: #333;
+  position: fixed;
+  top: 15px; /* 设置距离顶部的距离 */
+  left: 20px; /* 设置距离左侧的距离 */
+  font-size: 30px; /* 设置字体大小 */
+  font-weight: bold; /* 设置字体加粗 */
+  z-index: 2; /* 确保标题在最前面 */
+  margin-top: 20px; /* 增大间距 */
+  margin-left: 15px;
+}
+
+.edit-paper-share-input {
+  margin-left: 10px; /* 让输入框在分享按钮的右侧 */
+  padding: 10px;
+  font-size: 16px;
+  height: 40px; /* 设置与Share按钮相同的高度 */
+  background: transparent;
+  border: 1px solid rgb(218, 218, 218);
+  color: black; /* 确保输入文字为黑色 */
+  border-radius: 5px;
+  box-sizing: border-box; /* 确保padding不会影响高度 */
+}
+
+.edit-paper-share-input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.edit-paper-share-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-left: 10px;
+}
+
+.edit-paper-share-button:hover {
+  background-color: #fc5c7d;
+}
+
+.edit-paper-share-list-title {
+  color: #333;
+  margin-top: 25px; /* 调整位置，使其与import按钮和share按钮之间的距离一致 */
+  margin-bottom: 10px;
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.edit-paper-shared-users {
+  margin-top: 5px; /* 确保与share-list按钮有一定间距 */
+  margin-bottom: 20px;
+  margin-left: 10px; /* 增加左边距 */
+  max-height: 425px; /* 设置最大高度 */
+  overflow-y: auto; /* 允许垂直滚动 */
+  overflow-x: hidden; /* 禁止横向滚动 */
+  padding-right: 80px; /* 增加右侧内边距，使滚动条向右移动 */
+}
+
+.edit-paper-shared-user {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 5px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  width: calc(150% - 30px);
+  height: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.edit-paper-delete-share-user-button {
+  background: #6a82fb;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.edit-paper-save-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  display: block; /* 确保按钮显示为块级元素 */
+  margin-top: 0px; /* 增加上边距以避免重叠 */
+  margin-left: 850px;
+}
+
+.edit-paper-quill-editor {
+  height: calc(100vh - 140px); /* 调整高度，使其顶部和底部空间更大 */
+  width: 1500px;
+  max-width: 50%; 
+  margin-top: 0; /* 让富文本编辑框顶部靠上一些 */
+  margin-bottom: 0; /* 让富文本编辑框底部靠下一些 */
+}
+
+.edit-paper-share-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: fixed;
+  top: 100px; /* 向上移动30px */
+  left: 25px;
+  z-index: 1;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+}
+
+.edit-paper-share-button-container {
+  display: flex;
+  align-items: center;
+  padding: 0; /* 确保没有填充 */
+  margin: 0; /* 确保没有边距 */
+}
+
+.edit-paper-refuse-access {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 24px;
+  font-weight: bold;
+  color: red;
+}

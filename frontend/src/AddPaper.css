@@ -1,30 +1,36 @@
 .add-paper-container {
-    padding: 20px;
-  }
-  
-  .title-input {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 20px;
-    font-size: 18px;
-  }
-  
-  .editor {
-    height: 400px;
-    margin-bottom: 20px;
-  }
-  
-  .save-button {
-    background-color: #6a82fb;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: 5px;
-  }
-  
-  .save-button:hover {
-    background-color: #fc5c7d;
-  }
-  
+  padding: 20px;
+}
+
+.title-input,
+.author-input,
+.keywords-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: black; /* 确保输入文字为黑色 */
+  border: 1px solid #ccc;
+}
+
+.title-input::placeholder,
+.author-input::placeholder,
+.keywords-input::placeholder {
+  color: black; /* 修改占位符文字为黑色 */
+}
+
+.save-button {
+  background-color: #6a82fb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  display: block; /* 确保按钮显示为块级元素 */
+  margin-top: 10px; /* 增加上边距以避免重叠 */
+}
+
+.save-button:hover {
+  background-color: #fc5c7d;
+}

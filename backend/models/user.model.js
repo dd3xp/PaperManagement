@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db.config');
+const sequelize = require('../config/database');
+const Library = require('./library.model');
 
 const User = sequelize.define('User', {
   username: {
@@ -14,5 +15,9 @@ const User = sequelize.define('User', {
 }, {
   timestamps: true
 });
+
+// 多对多关系
+User.belongsToMany(Library, { through: 'Favorites', foreignKey: 'userId' });
+Library.belongsToMany(User, { through: 'Favorites', foreignKey: 'libraryId' });
 
 module.exports = User;

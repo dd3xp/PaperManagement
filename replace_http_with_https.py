@@ -1,0 +1,31 @@
+import os
+
+def replace_http_with_https(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            file_contents = file.read()
+        
+        # ======================================在此处修改=======================================
+        file_contents = file_contents.replace('https://', 'http://')
+        
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(file_contents)
+    except Exception as e:
+        print(f"Error processing file {file_path}: {e}")
+
+def replace_in_directory(directory):
+    for root, dirs, files in os.walk(directory):
+        # 跳过任何名为node_modules的文件夹
+        dirs[:] = [d for d in dirs if d != 'node_modules']
+        for file in files:
+            if file.endswith('.js'):
+                file_path = os.path.join(root, file)
+                replace_http_with_https(file_path)
+
+def main():
+    directory = '.'  # 根目录
+    replace_in_directory(directory)
+    print("替换完成。")
+
+if __name__ == "__main__":
+    main()
