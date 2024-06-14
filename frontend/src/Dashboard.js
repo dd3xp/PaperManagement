@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Switch, Link, useHistory } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // 正确导入命名导出
+import { jwtDecode } from 'jwt-decode';
 import './Dashboard.css';
 import MyLibraries from './MyLibraries';
 import AllPapers from './AllPapers';
@@ -32,6 +32,10 @@ const Dashboard = () => {
     history.push('/auth');
   };
 
+  const handleUpdateProfile = () => {
+    window.open('/update-profile', '_blank');
+  };
+
   return (
     <Router>
       <div className="dashboard-container">
@@ -42,6 +46,7 @@ const Dashboard = () => {
             <li><Link to="/all-papers">All Papers</Link></li>
             <li><Link to="/all-libraries">All Libraries</Link></li>
           </ul>
+          <button onClick={handleUpdateProfile} className="logout-button">Update Profile</button>
           <button onClick={handleLogout} className="logout-button">Logout</button>
         </div>
         <div className="content">

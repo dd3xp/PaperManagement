@@ -64,3 +64,44 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+exports.updateUsername = async (req, res) => {
+  const { username } = req.body;
+  const userId = req.userId;
+
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.username = username;
+    await user.save();
+
+    res.json({ message: 'Username updated successfully', user });
+  } catch (error) {
+    console.error('Error updating username:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+exports.updatePassword = async (req, res) => {
+  const { password } = req.body;
+  const userId = req.userId;
+
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: 'Password updated successfully', user });
+  } catch (error) {
+    console.error('Error updating password:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

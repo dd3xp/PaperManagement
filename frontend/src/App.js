@@ -7,8 +7,9 @@ import MyLibraries from './MyLibraries';
 import AllPapers from './AllPapers';
 import AddPaper from './AddPaper';
 import EditPaper from './EditPaper';
-import AllLibraries from './AllLibraries'; // 新增 AllLibraries 组件导入
-import Comments from './Comments'; // 新增 Comments 组件导入
+import AllLibraries from './AllLibraries';
+import Comments from './Comments';
+import UpdateProfile from './UpdateProfile'; // 导入 UpdateProfile 组件
 
 const PrivateRoute = ({ component: Component, ...rest }) => {
   const isAuthenticated = !!localStorage.getItem('token');
@@ -35,10 +36,11 @@ const App = () => {
         <PrivateRoute path="/dashboard" component={Dashboard} />
         <PrivateRoute path="/my-libraries" component={MyLibraries} />
         <PrivateRoute path="/all-papers" component={AllPapers} />
-        <PrivateRoute path="/all-libraries" component={AllLibraries} /> {/* 新增 All Libraries 路由 */}
+        <PrivateRoute path="/all-libraries" component={AllLibraries} />
         <PrivateRoute path="/add-paper" component={AddPaper} />
         <PrivateRoute path="/edit-paper/:paperId" component={EditPaper} />
-        <PrivateRoute path="/comments/:paperId" component={Comments} /> {/* 新增 Comments 路由 */}
+        <PrivateRoute path="/comments/:paperId" component={Comments} />
+        <PrivateRoute path="/update-profile" component={UpdateProfile} /> {/* 添加 UpdateProfile 路由 */}
       </Switch>
     </Router>
   );

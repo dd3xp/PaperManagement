@@ -8,6 +8,7 @@ const Library = require('../models/library.model');
 const pdfParse = require('pdf-parse');
 const { Document, Packer, Paragraph } = require('docx');
 const puppeteer = require('puppeteer');
+const Comment = require('../models/comment.model');
 
 // 创建新论文
 const createPaper = async (req, res) => {
@@ -361,6 +362,7 @@ const deletePaper = async (req, res) => {
     const { paperId } = req.params;
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
+      console.log('Authorization token required');
       return res.status(401).json({ message: 'Authorization token required' });
     }
 
@@ -371,6 +373,7 @@ const deletePaper = async (req, res) => {
 
     const paper = await Paper.findOne({ where: { id: paperId, ownerId: userId } });
     if (!paper) {
+      console.log('Paper not found or access denied');
       return res.status(404).json({ error: 'Paper not found or access denied' });
     }
 
@@ -378,21 +381,37 @@ const deletePaper = async (req, res) => {
     const txtPath = path.join(__dirname, '..', 'txts', `${paperId}.txt`);
     const docxPath = path.join(__dirname, '..', 'docxs', `${paperId}.docx`);
 
-    if (fs.existsSync(pdfPath)) {
-      fs.unlinkSync(pdfPath);
+    try {
+      if (fs.existsSync(pdfPath)) {
+        fs.unlinkSync(pdfPath);
+      }
+      if (fs.existsSync(txtPath)) {
+        fs.unlinkSync(txtPath);
+      }
+      if (fs.existsSync(docxPath)) {
+        fs.unlinkSync(docxPath);
+      }
+    } catch (fileError) {
+      console.error(`Error deleting files for paper with id: ${paperId}`, fileError);
+      return res.status(500).json({ error: 'An error occurred while deleting files' });
     }
 
-    if (fs.existsSync(txtPath)) {
-      fs.unlinkSync(txtPath);
+    try {
+      await Comment.destroy({ where: { paperId: paperId } });
+    } catch (commentError) {
+      console.error(`Error deleting comments for paper with id: ${paperId}`, commentError);
+      return res.status(500).json({ error: 'An error occurred while deleting comments' });
     }
 
-    if (fs.existsSync(docxPath)) {
-      fs.unlinkSync(docxPath);
+    try {
+      await paper.destroy();
+    } catch (paperError) {
+      console.error(`Error deleting paper with id: ${paperId}`, paperError);
+      return res.status(500).json({ error: 'An error occurred while deleting the paper' });
     }
 
-    await paper.destroy();
-    console.log(`Paper with id: ${paperId} and associated files deleted successfully`);
-    res.status(200).json({ message: 'Paper deleted successfully' });
+    console.log(`Paper with id: ${paperId} and associated files and comments deleted successfully`);
+    res.status(200).json({ message: 'Paper and its comments deleted successfully' });
   } catch (error) {
     console.error('Error deleting paper:', error);
     res.status(500).json({ error: 'An error occurred while deleting the paper' });
