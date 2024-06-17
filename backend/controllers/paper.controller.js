@@ -619,7 +619,7 @@ const unsharePaper = async (req, res) => {
     }
 
     let sharedUsers = paper.sharedUsers || [];
-    sharedUsers = sharedUsers.filter(user => user !== userId);
+    sharedUsers = sharedUsers.filter(user => user !== parseInt(userId, 10)); // 确保 userId 是整数
 
     paper.sharedUsers = sharedUsers;
     await paper.save();

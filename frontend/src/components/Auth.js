@@ -7,6 +7,7 @@ const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState(''); // 新增状态存储错误消息
   const history = useHistory();
 
   const handleLogin = async (e) => {
@@ -15,10 +16,10 @@ const Auth = () => {
       const response = await axios.post('http://localhost:5001/api/auth/login', { username, password });
       localStorage.setItem('token', response.data.token);
       alert('Login successful!');
-      history.push('/dashboard'); // 登录成功后跳转到仪表盘页面
+      history.push('/dashboard');
     } catch (error) {
-      console.error('Login failed:', error.response?.data?.message || error.message);
-      alert('Login failed! ' + (error.response?.data?.message || error.message));
+      console.error('Login failed:', error.response?.data?.error || error.message);
+      setErrorMessage(error.response?.data?.error || error.message); // 设置错误消息
     }
   };
 
@@ -29,8 +30,8 @@ const Auth = () => {
       setIsLogin(true);
       alert('Registration successful! Please log in.');
     } catch (error) {
-      console.error('Registration failed:', error.response?.data?.message || error.message);
-      alert('Registration failed! ' + (error.response?.data?.message || error.message));
+      console.error('Registration failed:', error.response?.data?.error || error.message);
+      setErrorMessage(error.response?.data?.error || error.message); // 设置错误消息
     }
   };
 
@@ -38,6 +39,7 @@ const Auth = () => {
     <div className="auth-container">
       <div className="auth-form">
         <h2>{isLogin ? 'Login' : 'Register'}</h2>
+        {errorMessage && <div className="auth-error-message">{errorMessage}</div>} {/* 显示错误消息 */}
         <form onSubmit={isLogin ? handleLogin : handleRegister}>
           <input
             type="text"
@@ -57,7 +59,7 @@ const Auth = () => {
           />
           <button type="submit" className="auth-button">{isLogin ? 'Login' : 'Register'}</button>
         </form>
-        <div className="auth-switch" onClick={() => setIsLogin(!isLogin)}>
+        <div className="auth-switch" onClick={() => { setIsLogin(!isLogin); setErrorMessage(''); }}>
           {isLogin ? 'Don\'t have an account? Register' : 'Already have an account? Login'}
         </div>
       </div>

@@ -21,8 +21,8 @@ def replace_text_in_directory(directory, text_to_replace, replacement_text):
 def main():
     directory = '.'  # 根目录
     replacements = {
-        'localhost:3000' : 'localhost:3000',
-        'localhost:5001': 'localhost:5001'
+        'localhost:3000' : 'localhost:3000', #前端
+        'localhost:5001': 'localhost:5001'   #后端
     } # ======================================在此处修改=======================================
     
     for text_to_replace, replacement_text in replacements.items():

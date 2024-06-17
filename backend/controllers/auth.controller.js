@@ -29,6 +29,11 @@ exports.register = async (req, res) => {
   }
 
   try {
+    const existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ username, password: hashedPassword });
     res.status(201).json({ message: 'User created', user });
@@ -49,12 +54,12 @@ exports.login = async (req, res) => {
   try {
     const user = await User.findOne({ where: { username } });
     if (!user) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ error: 'Username not found' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ message: 'Invalid password' });
+      return res.status(400).json({ error: 'Invalid password' });
     }
 
     const token = jwt.sign({ userId: user.id }, secret, { expiresIn: '1h' });
@@ -75,6 +80,11 @@ exports.updateUsername = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
     user.username = username;
     await user.save();
 
@@ -93,6 +103,11 @@ exports.updatePassword = async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    const validationError = validateInput(user.username, password);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

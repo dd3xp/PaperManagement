@@ -1,0 +1,14 @@
+
+
+使用minGw和sfml进行编译。 
+ 
+运行之前，需将Makefile中的这个路径改成MinGw的路径，再将minGw中的include，
+lib以及bin的地址添加至环境变量。然后输入指令make即可编译。 
+ 
+在run.bat中，将以上两个地址设置为自己的计算机中sfml和适用于sfml的mingw的bin
+的地址，然后运行run.bat就可以开玩了。 
+非常重要！！！！ 
+需要用网站https://www.sfml-dev.org/download/sfml/2.6.1/中该页面提供的MinGW版本进
+行编译，请不要用自己下载的，否则会提示出错！！！ 
+ 
+在我的电脑上，使用的是32位的sfml和minGw。 
