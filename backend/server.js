@@ -34,10 +34,8 @@ app.use('/pdfs', express.static(path.join(__dirname, 'pdfs')));
 
 Library.hasMany(Paper, { foreignKey: 'libraryId' });
 Paper.belongsTo(Library, { foreignKey: 'libraryId' });
-
 User.belongsToMany(Library, { through: 'Favorites', foreignKey: 'userId' });
 Library.belongsToMany(User, { through: 'Favorites', foreignKey: 'libraryId' });
-
 Paper.hasMany(Comment, { foreignKey: 'paperId' });
 Comment.belongsTo(Paper, { foreignKey: 'paperId' });
 User.hasMany(Comment, { foreignKey: 'userId' });

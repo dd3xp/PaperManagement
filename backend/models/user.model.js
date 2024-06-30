@@ -16,8 +16,4 @@ const User = sequelize.define('User', {
   timestamps: true
 });
 
-// 多对多关系
-User.belongsToMany(Library, { through: 'Favorites', foreignKey: 'userId' });
-Library.belongsToMany(User, { through: 'Favorites', foreignKey: 'libraryId' });
-
 module.exports = User;
